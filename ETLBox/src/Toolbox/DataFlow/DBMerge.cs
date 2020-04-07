@@ -99,19 +99,29 @@ namespace ALE.ETLBox.DataFlow
             DestinationTable.BeforeBatchWrite = batch =>
             {
                 if (DeltaMode == DeltaMode.Delta)
-                    DeltaTable.AddRange(batch.Where(row => row.ChangeAction != "D"));
+                    DeltaTable.AddRange(batch.Where(row => row.ChangeAction != ChangeAction.Delete));
                 else
                     DeltaTable.AddRange(batch);
 
                 if (!UseTruncateMethod)
                 {
-                    SqlDeleteIds(batch.Where(row => row.ChangeAction != "I" && row.ChangeAction != "E"));
-                    return batch.Where(row => row.ChangeAction == "I" || row.ChangeAction == "U").ToArray();
+                    SqlDeleteIds(batch.Where(row =>
+                        row.ChangeAction != ChangeAction.Insert &&
+                        row.ChangeAction != ChangeAction.None
+                        ));
+                    return batch.Where(row =>
+                        row.ChangeAction == ChangeAction.Insert ||
+                        row.ChangeAction == ChangeAction.Update
+                        ).ToArray();
                 }
                 else
                 {
                     TruncateDestinationOnce();
-                    return batch.Where(row => row.ChangeAction == "I" || row.ChangeAction == "U" || row.ChangeAction == "E").ToArray();
+                    return batch.Where(row =>
+                        row.ChangeAction == ChangeAction.Insert ||
+                        row.ChangeAction == ChangeAction.Update ||
+                        row.ChangeAction == ChangeAction.None
+                        ).ToArray();
                 }
             };
 
@@ -121,10 +131,10 @@ namespace ALE.ETLBox.DataFlow
         private void InitOutputFlow()
         {
             int x = 0;
-            OutputSource = new CustomSource<TInput>(() =>
-            {
-                return DeltaTable.ElementAt(x++);
-            }, () => x >= DeltaTable.Count);
+            OutputSource = new CustomSource<TInput>(
+                () => DeltaTable[x++],
+                () => x >= DeltaTable.Count
+                );
 
             DestinationTable.OnCompletion = () =>
             {
@@ -143,25 +153,24 @@ namespace ALE.ETLBox.DataFlow
             {
                 if (find != null)
                 {
-                    find.ChangeAction = "D";
-                    row.ChangeAction = "D";
+                    find.ChangeAction = ChangeAction.Delete;
+                    row.ChangeAction = ChangeAction.Delete;
                 }
             }
             else
             {
-                row.ChangeAction = "I";
-                //TInput find = InputData.Where(d => d.UniqueId == row.UniqueId).FirstOrDefault();
+                row.ChangeAction = ChangeAction.Insert;
                 if (find != null)
                 {
                     if (row.Equals(find))
                     {
-                        row.ChangeAction = "E";
-                        find.ChangeAction = "E";
+                        row.ChangeAction = ChangeAction.None;
+                        find.ChangeAction = ChangeAction.None;
                     }
                     else
                     {
-                        row.ChangeAction = "U";
-                        find.ChangeAction = "U";
+                        row.ChangeAction = ChangeAction.Update;
+                        find.ChangeAction = ChangeAction.Update;
                     }
                 }
             }
@@ -188,14 +197,14 @@ namespace ALE.ETLBox.DataFlow
             if (DeltaMode == DeltaMode.NoDeletions) return;
             IEnumerable<TInput> deletions = null;
             if (DeltaMode == DeltaMode.Delta)
-                deletions = InputData.Where(row => row.ChangeAction == "D").ToList();
+                deletions = InputData.Where(row => row.ChangeAction == ChangeAction.Delete).ToList();
             else
-                deletions = InputData.Where(row => String.IsNullOrEmpty(row.ChangeAction)).ToList();
+                deletions = InputData.Where(row => row.ChangeAction is null).ToList();
             if (!UseTruncateMethod)
                 SqlDeleteIds(deletions);
-            foreach (var row in deletions) //.ForEach(row =>
+            foreach (var row in deletions)
             {
-                row.ChangeAction = "D";
+                row.ChangeAction = ChangeAction.Delete;
                 row.ChangeDate = DateTime.Now;
             };
             DeltaTable.AddRange(deletions);
