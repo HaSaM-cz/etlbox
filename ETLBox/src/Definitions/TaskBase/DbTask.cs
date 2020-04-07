@@ -149,31 +149,29 @@ namespace ALE.ETLBox.ControlFlow
             {
                 conn.Open();
                 if (!DisableLogging) LoggingStart();
-                IDataReader reader = conn.ExecuteReader(Command, Parameter) as IDataReader;
-                for (int rowNr = 0; rowNr < Limit; rowNr++)
+                using (var reader = conn.ExecuteReader(Command, Parameter))
                 {
-                    if (reader.Read())
+                    object value;
+                    for (int rowIndex = 0; rowIndex < Limit; rowIndex++)
                     {
-                        BeforeRowReadAction?.Invoke();
-                        for (int i = 0; i < Actions?.Count; i++)
+                        if (reader.Read())
                         {
-                            if (!reader.IsDBNull(i))
+                            BeforeRowReadAction?.Invoke();
+                            for (int columnIndex = 0; columnIndex < Actions?.Count; columnIndex++)
                             {
-                                Actions?[i]?.Invoke(reader.GetValue(i));
+                                value = reader.IsDBNull(columnIndex) ?
+                                    null :
+                                    reader.GetValue(columnIndex);
+                                Actions?[columnIndex]?.Invoke(value);
                             }
-                            else
-                            {
-                                Actions?[i]?.Invoke(null);
-                            }
+                            AfterRowReadAction?.Invoke();
                         }
-                        AfterRowReadAction?.Invoke();
-                    }
-                    else
-                    {
-                        break;
+                        else
+                        {
+                            break;
+                        }
                     }
                 }
-                reader.Close();
                 if (!DisableLogging) LoggingEnd();
             }
             finally
