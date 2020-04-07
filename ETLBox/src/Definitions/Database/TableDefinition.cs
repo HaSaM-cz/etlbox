@@ -68,6 +68,7 @@ namespace ALE.ETLBox
 
         public bool HasColumns => Columns.Count > 0;
         public List<TableColumn> Columns { get; }
+        public IEnumerable<TableColumn> PrimaryKeyColumns => Columns?.Where(i => i.IsPrimaryKey);
         public int? IDColumnIndex
         {
             get
