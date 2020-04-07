@@ -68,19 +68,18 @@ namespace ALE.ETLBox
 
         public bool HasColumns => Columns.Count > 0;
         public List<TableColumn> Columns { get; }
-        public IEnumerable<TableColumn> PrimaryKeyColumns => Columns?.Where(i => i.IsPrimaryKey);
         public int? IDColumnIndex
         {
             get
             {
-                TableColumn idCol = Columns.FirstOrDefault(col => col.IsIdentity);
+                var idCol = Columns.Identity().FirstOrDefault();
                 if (idCol != null)
                     return Columns.IndexOf(idCol);
                 else
                     return null;
             }
         }
-        public string AllColumnsWithoutIdentity => Columns.Where(col => !col.IsIdentity).AsString();
+        public string AllColumnsWithoutIdentity => Columns.Except(Columns.Identity()).AsString();
 
         public bool EnsureColumns(IConnectionManager connectionManager)
         {
