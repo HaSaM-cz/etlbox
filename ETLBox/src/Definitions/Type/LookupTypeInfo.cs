@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Dynamic;
-using System.Linq;
 using System.Reflection;
 
 namespace ALE.ETLBox.DataFlow
@@ -24,7 +22,7 @@ namespace ALE.ETLBox.DataFlow
 
         private void AddMatchColumn(PropertyInfo propInfo)
         {
-            var attr = propInfo.GetCustomAttribute(typeof(MatchColumn)) as MatchColumn;
+            var attr = propInfo.GetCustomAttribute<MatchColumn>();
             if (attr != null)
                 MatchColumns.Add(new AttributeMappingInfo()
                 {
@@ -35,7 +33,7 @@ namespace ALE.ETLBox.DataFlow
 
         private void AddRetrieveColumn(PropertyInfo propInfo)
         {
-            var attr = propInfo.GetCustomAttribute(typeof(RetrieveColumn)) as RetrieveColumn;
+            var attr = propInfo.GetCustomAttribute<RetrieveColumn>();
             if (attr != null)
                 RetrieveColumns.Add(new AttributeMappingInfo()
                 {

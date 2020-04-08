@@ -42,7 +42,7 @@ namespace ALE.ETLBoxTests
             };
 
             //Act
-            string id = row.UniqueId;
+            string id = row.Id;
 
             //Assert
             Assert.True(id == "1A" || id == "A1");
@@ -65,7 +65,7 @@ namespace ALE.ETLBoxTests
                         ColValue2 = 3.0
                     };
                     //Act
-                    ids.Add(int.Parse(row.UniqueId));
+                    ids.Add(int.Parse(row.Id));
                 });
 
             //Assert

@@ -1,19 +1,54 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace ALE.ETLBox.DataFlow
 {
-    public interface IMergeableRow
+    /// <summary>
+    /// Represents table row in destination database for <see cref="DbMerge{TInput}"/>
+    /// </summary>
+    public interface IMergeableRow :
+        IEquatable<IMergeableRow>
     {
         /// <summary>
-        /// Date and time when the object was considered for merging
+        /// Unique row identifier (textual concatenation of primary key destination table column values)
         /// </summary>
-        DateTime ChangeDate { get; set; }
+        /// <value>not white space</value>
+        string Id { get; }
+        /// <summary>
+        /// Names of destination table columns (primary key) from which values <see cref="Id"/> is concatenated to be used for row deletion from destination table
+        /// </summary>
+        /// <value>non-null. Empty means to use table truncation instead (true <see cref="DbMerge{TInput}.UseTruncateMethod"/>)</value>
+        IEnumerable<string> IdColumnNamesForDeletion { get; }
         /// <summary>
         /// The result of a merge operation
         /// </summary>
+        /// <remarks><see cref="SetChangeTime"/> is called when this value is set</remarks>
         /// <value>null means not determined yet</value>
         ChangeAction? ChangeAction { get; set; }
-        string UniqueId { get; }
-        bool IsDeletion { get; }
+        /// <summary>
+        /// Time when the object was considered for merging
+        /// </summary>
+        /// <remarks>
+        /// When <see cref="ChangeAction"/> is set, this value is set to <see cref="DateTime.Now"/>, but it can be changed later to another value if required
+        /// </remarks>
+        /// <value>null means not determined yet</value>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <see cref="ChangeAction"/> is specified/null and this value is going to be set to null/<see cref="DateTime"/>
+        /// </exception>
+        DateTime? ChangeTime { get; set; }
+
+        /// <summary>
+        /// Updates <see cref="ChangeAction"/> if possible using internal logic
+        /// </summary>
+        void SetChangeAction();
+        /// <summary>
+        /// Updates <see cref="ChangeTime"/> to <see cref="DateTime.Now"/>/null if <see cref="ChangeAction"/> is <see cref="ChangeAction"/>/null
+        /// </summary>
+        void SetChangeTime();
+        /// <summary>
+        /// Compares this object with <paramref name="other"/> for equality while ignoring <see cref="Id"/>s
+        /// </summary>
+        /// <param name="other">Other object</param>
+        bool EqualsWithoutId(IMergeableRow other);
     }
 }

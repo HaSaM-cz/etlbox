@@ -23,16 +23,15 @@ namespace ALE.ETLBoxTests.DataFlowTests
         {
         }
 
-        public class MySimpleRow : IMergeableRow
+        public class MySimpleRow :
+            MergeableRowBase<MySimpleRow>
         {
             [ColumnMap("Col1")]
             public long Key { get; set; }
             [ColumnMap("Col2")]
             public string Value { get; set; }
-            public DateTime ChangeDate { get; set; }
-            public ChangeAction? ChangeAction { get; set; }
-            public string UniqueId => Key.ToString();
-            public bool IsDeletion => false;
+
+            public override IEnumerable<object> IdValues => Enumerable.Repeat(Key, 1).Cast<object>();
         }
 
         [Theory, MemberData(nameof(Connections))]

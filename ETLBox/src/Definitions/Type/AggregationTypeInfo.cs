@@ -1,7 +1,5 @@
-﻿using ALE.ETLBox.DataFlow;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Dynamic;
 using System.Linq;
 using System.Reflection;
 
@@ -24,7 +22,7 @@ namespace ALE.ETLBox.DataFlow
 
         private void AddGroupColumn(PropertyInfo propInfo)
         {
-            var attr = propInfo.GetCustomAttribute(typeof(GroupColumn)) as GroupColumn;
+            var attr = propInfo.GetCustomAttribute<GroupColumn>();
             if (attr != null)
             {
                 GroupColumns.Add(new AttributeMappingInfo()
@@ -37,7 +35,7 @@ namespace ALE.ETLBox.DataFlow
 
         private void AddAggregateColumn(PropertyInfo propInfo)
         {
-            var attr = propInfo.GetCustomAttribute(typeof(AggregateColumn)) as AggregateColumn;
+            var attr = propInfo.GetCustomAttribute<AggregateColumn>();
             if (attr != null)
             {
                 AggregateColumns.Add(new AggregateAttributeMapping()

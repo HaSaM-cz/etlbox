@@ -1,5 +1,6 @@
 ﻿using ALE.ETLBox.ConnectionManager;
 using ALE.ETLBox.ControlFlow;
+using ALE.ETLBox.Helper;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,29 +21,30 @@ namespace ALE.ETLBox.DataFlow
         DataFlowTransformation<TInput, TInput>,
         IDataFlowBatchDestination<TInput>,
         IDataFlowTransformation<TInput, TInput>
-        where TInput : IMergeableRow, new()
+        where TInput : class, IMergeableRow, new()
     {
         public DbMerge(TableDefinition tableDefinition, IConnectionManager connectionManager = null, int batchSize = DbDestination.DefaultBatchSize) :
             base(connectionManager)
         {
             this.TableDefinition = tableDefinition ?? throw new ArgumentNullException(nameof(tableDefinition));
             tableDefinition.ValidateName(nameof(tableDefinition));
-            typeInfo = new DBMergeTypeInfo(typeof(TInput));
-            DestinationTableAsSource = new DbSource<TInput>(tableDefinition, connectionManager);
-            DestinationTable = new DbDestination<TInput>(tableDefinition, connectionManager, batchSize: batchSize);
+            IdColumnNamesForDeletion = new TInput().IdColumnNamesForDeletion.ToArray();
+            destinationTableAsSource = new DbSource<TInput>(tableDefinition, connectionManager);
+            destinationTable = new DbDestination<TInput>(tableDefinition, connectionManager, batchSize: batchSize);
             InitInternalFlow();
             InitOutputFlow();
         }
 
         /* ITask Interface */
         public override string TaskName { get; set; } = "Insert, Upsert or delete in destination";
+        public IReadOnlyList<string> IdColumnNamesForDeletion { get; }
 
-        public async Task ExecuteAsync() => await OutputSource.ExecuteAsync();
-        public void Execute() => OutputSource.Execute();
+        public async Task ExecuteAsync() => await outputSource.ExecuteAsync();
+        public void Execute() => outputSource.Execute();
 
         /* Public Properties */
-        public override ISourceBlock<TInput> SourceBlock => OutputSource.SourceBlock;
-        public override ITargetBlock<TInput> TargetBlock => Lookup.TargetBlock;
+        public override ISourceBlock<TInput> SourceBlock => outputSource.SourceBlock;
+        public override ITargetBlock<TInput> TargetBlock => lookup.TargetBlock;
         public DeltaMode DeltaMode { get; set; }
 
         protected readonly TableDefinition TableDefinition;
@@ -53,57 +55,58 @@ namespace ALE.ETLBox.DataFlow
             set
             {
                 base.ConnectionManager = value;
-                DestinationTableAsSource.ConnectionManager = value;
-                DestinationTable.ConnectionManager = value;
+                destinationTableAsSource.ConnectionManager = value;
+                destinationTable.ConnectionManager = value;
             }
         }
         public List<TInput> DeltaTable { get; set; } = new List<TInput>();
         public bool UseTruncateMethod
         {
-            get
-            {
-                if (typeInfo.IdColumnNames == null || typeInfo.IdColumnNames?.Count == 0) return true;
-                return _useTruncateMethod;
-            }
-            set
-            {
-                _useTruncateMethod = value;
-            }
+            get => IdColumnNamesForDeletion.Count == 0 || useTruncateMethod;
+            set => useTruncateMethod = value;
         }
         public int BatchSize
         {
-            get => DestinationTable.BatchSize;
-            set => DestinationTable.BatchSize = value;
+            get => destinationTable.BatchSize;
+            set => destinationTable.BatchSize = value;
         }
 
         /* Private stuff */
-        bool _useTruncateMethod;
+        ObjectNameDescriptor TableName => new ObjectNameDescriptor(TableDefinition.Name, ConnectionType);
+        List<TInput> OriginalDestinationRows => lookup.LookupData;
 
-        ObjectNameDescriptor TN => new ObjectNameDescriptor(TableDefinition.Name, ConnectionType);
-        LookupTransformation<TInput, TInput> Lookup { get; set; }
-        DbSource<TInput> DestinationTableAsSource { get; set; }
-        DbDestination<TInput> DestinationTable { get; set; }
-        List<TInput> InputData => Lookup.LookupData;
-        Dictionary<string, TInput> InputDataDict { get; set; }
-        CustomSource<TInput> OutputSource { get; set; }
-        bool WasTruncationExecuted { get; set; }
-        private readonly DBMergeTypeInfo typeInfo;
+        bool useTruncateMethod;
+        LookupTransformation<TInput, TInput> lookup;
+        readonly DbSource<TInput> destinationTableAsSource;
+        readonly DbDestination<TInput> destinationTable;
+        Dictionary<string, TInput> destinationIdToOriginalRow;
+        CustomSource<TInput> outputSource;
+        bool wasTruncationExecuted;
 
         private void InitInternalFlow()
         {
-            Lookup = new LookupTransformation<TInput, TInput>(
-                DestinationTableAsSource,
+            lookup = new LookupTransformation<TInput, TInput>(
+                destinationTableAsSource,
                 row => UpdateRowWithDeltaInfo(row)
             );
 
-            DestinationTable.BeforeBatchWrite = batch =>
+            destinationTable.BeforeBatchWrite = batch =>
             {
                 if (DeltaMode == DeltaMode.Delta)
                     DeltaTable.AddRange(batch.Where(row => row.ChangeAction != ChangeAction.Delete));
                 else
                     DeltaTable.AddRange(batch);
 
-                if (!UseTruncateMethod)
+                if (UseTruncateMethod)
+                {
+                    TruncateDestinationOnce();
+                    return batch.Where(row =>
+                        row.ChangeAction == ChangeAction.Insert ||
+                        row.ChangeAction == ChangeAction.Update ||
+                        row.ChangeAction == ChangeAction.None
+                        ).ToArray();
+                }
+                else
                 {
                     SqlDeleteIds(batch.Where(row =>
                         row.ChangeAction != ChangeAction.Insert &&
@@ -114,130 +117,118 @@ namespace ALE.ETLBox.DataFlow
                         row.ChangeAction == ChangeAction.Update
                         ).ToArray();
                 }
-                else
-                {
-                    TruncateDestinationOnce();
-                    return batch.Where(row =>
-                        row.ChangeAction == ChangeAction.Insert ||
-                        row.ChangeAction == ChangeAction.Update ||
-                        row.ChangeAction == ChangeAction.None
-                        ).ToArray();
-                }
             };
 
-            Lookup.LinkTo(DestinationTable);
+            lookup.LinkTo(destinationTable);
         }
 
         private void InitOutputFlow()
         {
             int x = 0;
-            OutputSource = new CustomSource<TInput>(
+            outputSource = new CustomSource<TInput>(
                 () => DeltaTable[x++],
                 () => x >= DeltaTable.Count
                 );
 
-            DestinationTable.OnCompletion = () =>
+            destinationTable.OnCompletion = () =>
             {
                 IdentifyAndDeleteMissingEntries();
-                OutputSource.Execute();
+                outputSource.Execute();
             };
         }
 
         private TInput UpdateRowWithDeltaInfo(TInput row)
         {
-            if (InputDataDict == null) InitInputDataDictionary();
-            row.ChangeDate = DateTime.Now;
-            TInput find = default(TInput);
-            InputDataDict.TryGetValue(row.UniqueId, out find);
-            if (DeltaMode == DeltaMode.Delta && row.IsDeletion)
+            if (row is null)
+                throw new ArgumentNullException(nameof(row));
+            row.SetChangeAction();
+            InitDestinationIdToOriginalRowOnce();
+            destinationIdToOriginalRow.TryGetValue(row.Id, out var originalDestinationRow);
+            if (
+                DeltaMode == DeltaMode.Delta &&
+                row.ChangeAction == ChangeAction.Delete
+                )
             {
-                if (find != null)
-                {
-                    find.ChangeAction = ChangeAction.Delete;
-                    row.ChangeAction = ChangeAction.Delete;
-                }
+                if (originalDestinationRow != null)
+                    originalDestinationRow.ChangeAction = ChangeAction.Delete;
             }
             else
             {
-                row.ChangeAction = ChangeAction.Insert;
-                if (find != null)
+                if (originalDestinationRow is null)
+                    row.ChangeAction = ChangeAction.Insert;
+                else
                 {
-                    if (row.Equals(find))
+                    if (row.EqualsWithoutId(originalDestinationRow))
                     {
                         row.ChangeAction = ChangeAction.None;
-                        find.ChangeAction = ChangeAction.None;
+                        originalDestinationRow.ChangeAction = ChangeAction.None;
                     }
                     else
                     {
                         row.ChangeAction = ChangeAction.Update;
-                        find.ChangeAction = ChangeAction.Update;
+                        originalDestinationRow.ChangeAction = ChangeAction.Update;
                     }
                 }
             }
             return row;
         }
 
-        private void InitInputDataDictionary()
+        private void InitDestinationIdToOriginalRowOnce()
         {
-            InputDataDict = new Dictionary<string, TInput>();
-            foreach (var d in InputData)
-                InputDataDict.Add(d.UniqueId, d);
+            if (destinationIdToOriginalRow != null)
+                return;
+            destinationIdToOriginalRow = new Dictionary<string, TInput>();
+            foreach (var d in OriginalDestinationRows)
+                destinationIdToOriginalRow.Add(d.Id, d);
         }
 
         void TruncateDestinationOnce()
         {
-            if (WasTruncationExecuted == true) return;
-            WasTruncationExecuted = true;
+            if (wasTruncationExecuted == true) return;
+            wasTruncationExecuted = true;
             if (DeltaMode == DeltaMode.NoDeletions == true) return;
             TruncateTableTask.Truncate(this.ConnectionManager, TableDefinition.Name);
         }
 
         void IdentifyAndDeleteMissingEntries()
         {
-            if (DeltaMode == DeltaMode.NoDeletions) return;
+            if (DeltaMode == DeltaMode.NoDeletions)
+                return;
             IEnumerable<TInput> deletions = null;
             if (DeltaMode == DeltaMode.Delta)
-                deletions = InputData.Where(row => row.ChangeAction == ChangeAction.Delete).ToList();
+                deletions = OriginalDestinationRows.WithChangeAction(ChangeAction.Delete).ToList();
             else
-                deletions = InputData.Where(row => row.ChangeAction is null).ToList();
+                deletions = OriginalDestinationRows.WithChangeAction(null).ToList();
             if (!UseTruncateMethod)
                 SqlDeleteIds(deletions);
             foreach (var row in deletions)
-            {
                 row.ChangeAction = ChangeAction.Delete;
-                row.ChangeDate = DateTime.Now;
-            };
             DeltaTable.AddRange(deletions);
         }
 
         private void SqlDeleteIds(IEnumerable<TInput> rowsToDelete)
         {
-            var idsToDelete = rowsToDelete.Select(row => $"'{row.UniqueId}'");
-            if (idsToDelete.Count() > 0)
-            {
-                string idNames = $"{QB}{typeInfo.IdColumnNames.First()}{QE}";
-                if (typeInfo.IdColumnNames.Count > 1)
-                    idNames = CreateConcatSqlForNames();
-                new SqlTask(this, $@"
-            DELETE FROM {TN.QuotatedFullName} 
-            WHERE {idNames} IN (
-            {String.Join(",", idsToDelete)}
-            )")
-                {
-                    DisableLogging = true,
-                }.ExecuteNonQuery();
-            }
+            if (IdColumnNamesForDeletion.Count == 0)
+                throw new InvalidOperationException();
+            if (!rowsToDelete.Any())
+                return;
+            var idsToDelete = rowsToDelete.Select(row => $"'{row.Id}'");
+            string id = ConnectionType.ConcatColumns(IdColumnNamesForDeletion);
+            foreach (var idsToDeleteBatch in idsToDelete.Batch(BatchSize))
+                SqlDeleteIds(id, idsToDelete);
         }
 
-        private string CreateConcatSqlForNames()
+        private void SqlDeleteIds(string id, IEnumerable<string> idsToDelete)
         {
-            string result = $"CONCAT( {string.Join(",", typeInfo.IdColumnNames.Select(cn => $"{QB}{cn}{QE}"))} )";
-            if (this.ConnectionType == ConnectionManagerType.SQLite)
-                result = $" {string.Join("||", typeInfo.IdColumnNames.Select(cn => $"{QB}{cn}{QE}"))} ";
-            return result;
+            string ids = string.Join(",", idsToDelete);
+            new SqlTask(this, $@"DELETE FROM {TableName.QuotatedFullName} WHERE {id} IN ({ids})")
+            {
+                DisableLogging = true
+            }.
+            ExecuteNonQuery();
         }
 
-        public void Wait() => DestinationTable.Wait();
-        public Task Completion => DestinationTable.Completion;
+        public void Wait() => destinationTable.Wait();
+        public Task Completion => destinationTable.Completion;
     }
 }

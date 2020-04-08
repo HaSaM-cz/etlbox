@@ -27,7 +27,7 @@ namespace ALE.ETLBox.DataFlow
 
         private DbSource(IConnectionManager connectionManager = null) :
             base(connectionManager)
-            => typeInfo = new DBTypeInfo(typeof(TOutput));
+            => typeInfo = new DbTypeInfo(typeof(TOutput));
 
         public DbSource(TableDefinition tableDefinition, IConnectionManager connectionManager = null) :
             this(connectionManager)
@@ -84,7 +84,7 @@ namespace ALE.ETLBox.DataFlow
             }
         }
 
-        private readonly DBTypeInfo typeInfo;
+        private readonly DbTypeInfo typeInfo;
         string SourceDescription
         {
             get

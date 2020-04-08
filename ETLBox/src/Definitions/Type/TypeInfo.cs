@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Dynamic;
-using System.Linq;
 using System.Reflection;
 
 namespace ALE.ETLBox.DataFlow
@@ -15,14 +14,14 @@ namespace ALE.ETLBox.DataFlow
         internal bool IsDynamic { get; set; }
         internal int ArrayLength { get; set; }
 
-        internal TypeInfo(Type typ)
+        internal TypeInfo(Type type)
         {
-            IsArray = typ.IsArray;
-            if (typeof(IDynamicMetaObjectProvider).IsAssignableFrom(typ))
+            IsArray = type.IsArray;
+            if (typeof(IDynamicMetaObjectProvider).IsAssignableFrom(type))
                 IsDynamic = true;
             if (!IsArray && !IsDynamic)
             {
-                Properties = typ.GetProperties();
+                Properties = type.GetProperties();
                 PropertyLength = Properties.Length;
                 int index = 0;
                 foreach (var propInfo in Properties)
@@ -34,7 +33,7 @@ namespace ALE.ETLBox.DataFlow
             }
             else if (IsArray)
             {
-                ArrayLength = typ.GetArrayRank();
+                ArrayLength = type.GetArrayRank();
             }
         }
 

@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Dynamic;
-using System.Linq;
 using System.Reflection;
 
 namespace ALE.ETLBox.DataFlow
@@ -22,7 +20,7 @@ namespace ALE.ETLBox.DataFlow
 
         private void AddExcelColumnAttribute(PropertyInfo propInfo, int curIndex)
         {
-            var attr = propInfo.GetCustomAttribute(typeof(ExcelColumn)) as ExcelColumn;
+            var attr = propInfo.GetCustomAttribute<ExcelColumn>();
             if (attr != null)
                 ExcelIndex2PropertyIndex.Add(attr.Index, curIndex);
         }

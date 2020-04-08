@@ -18,30 +18,21 @@ namespace ALE.ETLBox
             set => _taskType = value;
         }
         public virtual string TaskName { get; set; } = "N/A";
-        public NLog.Logger NLogger { get; set; } = CF.ControlFlow.GetLogger();
+        public NLog.Logger NLogger { get; protected set; } = CF.ControlFlow.GetLogger();
 
         public virtual IConnectionManager ConnectionManager { get; set; }
 
         internal virtual IConnectionManager DbConnectionManager => ConnectionManager.DefaultIfNull();
 
-        public ConnectionManagerType ConnectionType => ConnectionManagerSpecifics.GetType(this.DbConnectionManager);
-        public string QB => ConnectionManagerSpecifics.GetBeginQuotation(this.ConnectionType);
-        public string QE => ConnectionManagerSpecifics.GetEndQuotation(this.ConnectionType);
+        public ConnectionManagerType ConnectionType => DbConnectionManager.Type();
+        public string QB => ConnectionType.GetBeginQuotation();
+        public string QE => ConnectionType.GetEndQuotation();
 
         public bool _disableLogging;
         public virtual bool DisableLogging
         {
-            get
-            {
-                if (ControlFlow.ControlFlow.DisableAllLogging == false)
-                    return _disableLogging;
-                else
-                    return ControlFlow.ControlFlow.DisableAllLogging;
-            }
-            set
-            {
-                _disableLogging = value;
-            }
+            get => CF.ControlFlow.DisableAllLogging || _disableLogging;
+            set => _disableLogging = value;
         }
 
         private string _taskHash;

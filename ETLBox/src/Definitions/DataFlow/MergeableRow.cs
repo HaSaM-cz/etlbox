@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -11,15 +10,21 @@ namespace ALE.ETLBox.DataFlow
     /// This implementation needs that you have flagged the id properties with the <see cref="IdColumn"/> attribute
     /// and the properties used to identify equal object flagged with the <see cref="CompareColumn"/> attribute.
     /// </summary>
-    /// <see cref="CompareColumn"/>
-    /// <see cref="IdColumn"/>
-    public abstract class MergeableRow : IMergeableRow
+    /// <typeparam name="T">Derived type</typeparam>
+    public abstract class MergeableRow<T> :
+        MergeableRowBase<T>
+        where T : MergeableRow<T>
     {
-        private static readonly Dictionary<Type, AttributeProperties> typeToAttributeProperties = new Dictionary<Type, AttributeProperties>();
+        protected MergeableRow() =>
+            InitAttributeProperties();
 
-        public MergeableRow()
+        #region AttributeProperties
+
+        protected AttributeProperties AttributeProperties => typeToAttributeProperties[GetType()];
+
+        private void InitAttributeProperties()
         {
-            Type curType = this.GetType();
+            Type curType = GetType();
             AttributeProperties curAttrProps;
             lock (typeToAttributeProperties)
             {
@@ -29,81 +34,67 @@ namespace ALE.ETLBox.DataFlow
                     curAttrProps = new AttributeProperties();
                     foreach (PropertyInfo propInfo in curType.GetProperties())
                     {
-                        var idAttr = propInfo.GetCustomAttribute(typeof(IdColumn)) as IdColumn;
+                        var idAttr = propInfo.GetCustomAttribute<IdColumn>();
                         if (idAttr != null)
-                            curAttrProps.IdAttributeProps.Add(propInfo);
-                        var compAttr = propInfo.GetCustomAttribute(typeof(CompareColumn)) as CompareColumn;
+                        {
+                            var columnMap = propInfo.GetCustomAttribute<ColumnMap>();
+                            string columnName = columnMap is null ?
+                                propInfo.Name :
+                                columnMap.ColumnName;
+                            curAttrProps.IdColumnNames.Add((propInfo, columnName));
+                        }
+                        var compAttr = propInfo.GetCustomAttribute<CompareColumn>();
                         if (compAttr != null)
-                            curAttrProps.CompareAttributeProps.Add(propInfo);
-                        var deleteAttr = propInfo.GetCustomAttribute(typeof(DeleteColumn)) as DeleteColumn;
+                            curAttrProps.CompareColumns.Add(propInfo);
+                        var deleteAttr = propInfo.GetCustomAttribute<DeleteColumn>();
                         if (deleteAttr != null)
-                            curAttrProps.DeleteAttributeProps.Add(Tuple.Create(propInfo, deleteAttr.DeleteOnMatchValue));
+                            curAttrProps.DeleteColumnMatchValues.Add((propInfo, deleteAttr.DeleteOnMatchValue));
                     }
                     typeToAttributeProperties.Add(curType, curAttrProps);
                 }
             }
         }
 
-        /// <summary>
-        /// <see cref="IMergeableRow.ChangeDate"/>
-        /// </summary>
-        public DateTime ChangeDate { get; set; }
+        private static readonly Dictionary<Type, AttributeProperties> typeToAttributeProperties = new Dictionary<Type, AttributeProperties>();
+
+        #endregion
+
+        public object GetValue(PropertyInfo property) => property?.GetValue(this);
 
         /// <summary>
-        /// <see cref="IMergeableRow.ChangeAction"/>
+        /// These are values of properties which have <see cref="IdColumn"/> attribute
         /// </summary>
-        public ChangeAction? ChangeAction { get; set; }
+        public override IEnumerable<object> IdValues => AttributeProperties.IdColumnNames.Select(i => GetValue(i.property));
+        /// <summary>
+        /// These are names (<see cref="ColumnMap.ColumnName"/>s) of properties which have <see cref="IdColumn"/> attribute (with optional <see cref="ColumnMap.ColumnName"/> attribute)
+        /// </summary>
+        public override IEnumerable<string> IdColumnNamesForDeletion => AttributeProperties.IdColumnNames.Select(i => i.columnName);
+        /// <summary>
+        /// These are values of properties which have <see cref="CompareColumn"/> attribute
+        /// </summary>
+        public override IEnumerable<object> ComparableValues => AttributeProperties.CompareColumns.Select(GetValue);
 
         /// <summary>
-        /// The UniqueId of the object. This is a concatenation evaluated from the properties
-        /// which have the IdColumn attribute. if using an object as type, it is converted into a string
-        /// using the ToString() method of the object.
+        /// Sets <see cref="ChangeAction"/> to <see cref="ChangeAction.Delete"/> if any property of this object has <see cref="DeleteColumn"/> attribute and all such properties values match <see cref="DeleteColumn.DeleteOnMatchValue"/>s
         /// </summary>
-        /// <see cref="IdColumn"/>
-        public string UniqueId
+        public override void SetChangeAction()
         {
-            get
+            var deleteColumnMatchValues = AttributeProperties.DeleteColumnMatchValues;
+            if (
+                deleteColumnMatchValues.Count > 0 &&
+                deleteColumnMatchValues.All(i => EqualityComparer<object>.Default.Equals(GetValue(i.property), i.matchValue))
+                )
             {
-                AttributeProperties attrProps = typeToAttributeProperties[this.GetType()];
-                string result = "";
-                foreach (var propInfo in attrProps.IdAttributeProps)
-                    result += propInfo?.GetValue(this).ToString();
-                return result;
+                ChangeAction = ETLBox.DataFlow.ChangeAction.Delete;
             }
-        }
-
-        public bool IsDeletion
-        {
-            get
-            {
-                AttributeProperties attrProps = typeToAttributeProperties[this.GetType()];
-                bool result = true;
-                foreach (var tup in attrProps.DeleteAttributeProps)
-                    result &= (tup.Item1?.GetValue(this)).Equals(tup.Item2);
-                return result;
-            }
-        }
-
-        /// <summary>
-        /// Overriding the Equals implementation. The Equals function is used identify records
-        /// that don't need to be updated. Only properties marked with the CompareColumn attribute
-        /// are considered for the comparison. If the property is of type object, the Equals() method of the object is used.
-        /// </summary>
-        /// <param name="other">Object to compare with. Should be of the same type.</param>
-        /// <returns>True if all properties marked with CompareColumn attribute are equal.</returns>
-        public override bool Equals(object other)
-        {
-            if (other == null) return false;
-            AttributeProperties attrProps = typeToAttributeProperties[this.GetType()];
-            bool result = true;
-            foreach (var propInfo in attrProps.CompareAttributeProps)
-                result &= (propInfo?.GetValue(this))?.Equals(propInfo?.GetValue(other)) ?? false;
-            return result;
-        }
-
-        public override int GetHashCode()
-        {
-            return base.GetHashCode();
         }
     }
+
+
+    /// <summary>
+    /// <see cref="MergeableRow{T}"/> for backwards compatibility
+    /// </summary>
+    public abstract class MergeableRow :
+        MergeableRow<MergeableRow>
+    { }
 }

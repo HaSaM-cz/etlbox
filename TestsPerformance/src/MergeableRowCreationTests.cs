@@ -71,7 +71,7 @@ namespace ALE.ETLBoxTests.Performance
                          ColValue1 = "X1" + i,
                          ColValue2 = "T1" + i
                      };
-                     string id = row.UniqueId;
+                     string id = row.Id;
                      bool isequal = row.Equals(row);
                      LogTask.Trace("Id:" + id + " Equals:" + isequal.ToString());
                  };

@@ -19,7 +19,7 @@ namespace ALE.ETLBox
         {
             Definition = definition ?? throw new ArgumentNullException(nameof(definition));
             Rows = rows ?? new List<object[]>();
-            typeInfo = new DBTypeInfo(typeof(T));
+            typeInfo = new DbTypeInfo(typeof(T));
         }
 
         public IColumnMappingCollection ColumnMapping => GetColumnMappingFromDefinition();
@@ -63,7 +63,7 @@ namespace ALE.ETLBox
         public TableDefinition Definition { get; }
         private int? IDColumnIndex => Definition.IDColumnIndex;
         bool HasIDColumnIndex => IDColumnIndex != null;
-        private readonly DBTypeInfo typeInfo;
+        private readonly DbTypeInfo typeInfo;
 
         public object this[string name] => Rows[GetOrdinal(name)];
         public object this[int i] => Rows[i];

@@ -6,13 +6,15 @@ namespace ALE.ETLBox.ConnectionManager
 {
     public static class ConnectionManagerSpecifics
     {
+        #region Type
+
         public static ConnectionManagerType GetType(IConnectionManager connection)
         {
             if (connection is null)
                 throw new System.ArgumentNullException(nameof(connection));
             if (connection.GetType() == typeof(SqlConnectionManager) ||
-                        connection.GetType() == typeof(SqlOdbcConnectionManager)
-                        )
+                connection.GetType() == typeof(SqlOdbcConnectionManager)
+                )
                 return ConnectionManagerType.SqlServer;
             else if (connection.GetType() == typeof(AccessOdbcConnectionManager))
                 return ConnectionManagerType.Access;
@@ -28,6 +30,10 @@ namespace ALE.ETLBox.ConnectionManager
         }
 
         public static ConnectionManagerType Type(this IConnectionManager connection) => GetType(connection);
+
+        #endregion
+
+        #region Quotations
 
         public static string GetBeginQuotation(this ConnectionManagerType type)
         {
@@ -77,6 +83,25 @@ namespace ALE.ETLBox.ConnectionManager
         public static string GetBeginQuotation(IConnectionManager connectionManager) => GetBeginQuotation(GetType(connectionManager));
         public static string GetEndQuotation(IConnectionManager connectionManager) => GetEndQuotation(GetType(connectionManager));
 
+        #endregion
 
+        #region Concat
+
+        public static string ConcatColumns(this ConnectionManagerType type, IEnumerable<string> columnNames)
+        {
+            if (columnNames is null)
+                throw new ArgumentNullException(nameof(columnNames));
+            var columns = type.AddQuotations(columnNames).ToArray();
+            return columns.Length switch
+            {
+                0 => string.Empty,
+                1 => columns[0],
+                _ => type == ConnectionManagerType.SQLite ?
+                    $" {string.Join("||", columns)} " :
+                    $"CONCAT( {string.Join(",", columns)} )"
+            };
+        }
+
+        #endregion
     }
 }

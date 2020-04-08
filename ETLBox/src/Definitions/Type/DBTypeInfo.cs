@@ -1,18 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Dynamic;
 using System.Linq;
 using System.Reflection;
 
 namespace ALE.ETLBox.DataFlow
 {
-    internal class DBTypeInfo : TypeInfo
+    internal class DbTypeInfo : TypeInfo
     {
         internal List<string> PropertyNames { get; set; } = new List<string>();
         internal Dictionary<string, string> ColumnMap2Property { get; set; } = new Dictionary<string, string>();
         internal Dictionary<PropertyInfo, Type> UnderlyingPropType { get; set; } = new Dictionary<PropertyInfo, Type>();
 
-        internal DBTypeInfo(Type typ) : base(typ)
+        internal DbTypeInfo(Type typ) : base(typ)
         {
 
         }
@@ -27,7 +26,7 @@ namespace ALE.ETLBox.DataFlow
 
         private void AddColumnMappingAttribute(PropertyInfo propInfo)
         {
-            var attr = propInfo.GetCustomAttribute(typeof(ColumnMap)) as ColumnMap;
+            var attr = propInfo.GetCustomAttribute<ColumnMap>();
             if (attr != null)
                 ColumnMap2Property.Add(attr.ColumnName, propInfo.Name);
         }
