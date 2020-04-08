@@ -7,8 +7,8 @@ namespace ALE.ETLBox.DataFlow
     /// <summary>
     /// This attribute defines if the column is included in the comparison to identify
     /// object that exists and needs to be updated. It it supposed
-    /// to use with an object that either inherits from MergeableRow.
-    /// If you implement the IMergeable interface, you need to override the Equals-method instead.
+    /// to use with an object that inherits from <see cref="MergeableRow"/>.
+    /// If you implement the <see cref="IMergeableRow"/> interface, you need to override the <see cref="object.Equals"/> method instead.
     /// </summary>
     /// <example>
     ///  public class MyPoco : MergeableRow

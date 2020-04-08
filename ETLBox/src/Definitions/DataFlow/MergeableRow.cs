@@ -7,25 +7,25 @@ using System.Reflection;
 namespace ALE.ETLBox.DataFlow
 {
     /// <summary>
-    /// Inherit from this class if you want to use your data object with a DBMerge.
-    /// This implementation needs that you have flagged the id properties with the IdColumn attribute
-    /// and the properties use to identify equal object flagged with the CompareColumn attribute.
+    /// Inherit from this class if you want to use your data object with a <see cref="DbMerge{TInput}"/>.
+    /// This implementation needs that you have flagged the id properties with the <see cref="IdColumn"/> attribute
+    /// and the properties used to identify equal object flagged with the <see cref="CompareColumn"/> attribute.
     /// </summary>
     /// <see cref="CompareColumn"/>
     /// <see cref="IdColumn"/>
     public abstract class MergeableRow : IMergeableRow
     {
-        private static ConcurrentDictionary<Type,AttributeProperties> AttributePropDict { get; }
-            = new ConcurrentDictionary<Type, AttributeProperties>();
+        private static readonly Dictionary<Type, AttributeProperties> typeToAttributeProperties = new Dictionary<Type, AttributeProperties>();
 
         public MergeableRow()
         {
             Type curType = this.GetType();
             AttributeProperties curAttrProps;
-            if (!AttributePropDict.TryGetValue(curType, out curAttrProps))
+            lock (typeToAttributeProperties)
             {
-                lock (this)
+                if (!typeToAttributeProperties.TryGetValue(curType, out curAttrProps))
                 {
+
                     curAttrProps = new AttributeProperties();
                     foreach (PropertyInfo propInfo in curType.GetProperties())
                     {
@@ -39,7 +39,7 @@ namespace ALE.ETLBox.DataFlow
                         if (deleteAttr != null)
                             curAttrProps.DeleteAttributeProps.Add(Tuple.Create(propInfo, deleteAttr.DeleteOnMatchValue));
                     }
-                    AttributePropDict.TryAdd(curType, curAttrProps);
+                    typeToAttributeProperties.Add(curType, curAttrProps);
                 }
             }
         }
@@ -64,7 +64,7 @@ namespace ALE.ETLBox.DataFlow
         {
             get
             {
-                AttributeProperties attrProps = AttributePropDict[this.GetType()];
+                AttributeProperties attrProps = typeToAttributeProperties[this.GetType()];
                 string result = "";
                 foreach (var propInfo in attrProps.IdAttributeProps)
                     result += propInfo?.GetValue(this).ToString();
@@ -76,7 +76,7 @@ namespace ALE.ETLBox.DataFlow
         {
             get
             {
-                AttributeProperties attrProps = AttributePropDict[this.GetType()];
+                AttributeProperties attrProps = typeToAttributeProperties[this.GetType()];
                 bool result = true;
                 foreach (var tup in attrProps.DeleteAttributeProps)
                     result &= (tup.Item1?.GetValue(this)).Equals(tup.Item2);
@@ -94,7 +94,7 @@ namespace ALE.ETLBox.DataFlow
         public override bool Equals(object other)
         {
             if (other == null) return false;
-            AttributeProperties attrProps = AttributePropDict[this.GetType()];
+            AttributeProperties attrProps = typeToAttributeProperties[this.GetType()];
             bool result = true;
             foreach (var propInfo in attrProps.CompareAttributeProps)
                 result &= (propInfo?.GetValue(this))?.Equals(propInfo?.GetValue(other)) ?? false;
@@ -105,12 +105,5 @@ namespace ALE.ETLBox.DataFlow
         {
             return base.GetHashCode();
         }
-    }
-
-    public class AttributeProperties
-    {
-        public List<PropertyInfo> IdAttributeProps { get; } = new List<PropertyInfo>();
-        public List<PropertyInfo> CompareAttributeProps { get; } = new List<PropertyInfo>();
-        public List<Tuple<PropertyInfo, object>> DeleteAttributeProps { get; } = new List<Tuple<PropertyInfo, object>>();
     }
 }
