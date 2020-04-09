@@ -52,11 +52,12 @@ namespace ALE.ETLBox.DataFlow
                 Array dest = clone as Array;
                 Array.Copy(source, dest, source.Length);
             }
-            else if(TypeInfo.IsDynamic) {
-                    clone = (TInput)Activator.CreateInstance(typeof(TInput));//new ExpandoObject();
+            else if(TypeInfo.IsDynamic)
+            {
+                    clone = (TInput)Activator.CreateInstance(typeof(TInput));
 
-                    var _original = (IDictionary<string, object>)row;
-                    var _clone = (IDictionary<string, object>)clone;
+                    var _original = TypeInfo.CastDynamic(row);
+                    var _clone = TypeInfo.CastDynamic(clone);
 
                     foreach (var kvp in _original)
                         _clone.Add(kvp);

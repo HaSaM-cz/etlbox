@@ -1,53 +1,93 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Dynamic;
+using System.Linq;
 using System.Reflection;
 
 namespace ALE.ETLBox.DataFlow
 {
     internal class TypeInfo
     {
-        internal PropertyInfo[] Properties { get; set; }
-        protected Dictionary<string, int> PropertyIndex { get; set; } = new Dictionary<string, int>();
-        internal int PropertyLength { get; set; }
-        internal bool IsArray { get; set; } = true;
-        internal bool IsDynamic { get; set; }
-        internal int ArrayLength { get; set; }
-
-        internal TypeInfo(Type type)
+        public TypeInfo(Type type)
         {
+            if (type is null)
+                throw new ArgumentNullException(nameof(type));
             IsArray = type.IsArray;
-            if (typeof(IDynamicMetaObjectProvider).IsAssignableFrom(type))
-                IsDynamic = true;
+            IsDynamic = IsDynamicType(type);
             if (!IsArray && !IsDynamic)
             {
                 Properties = type.GetProperties();
-                PropertyLength = Properties.Length;
-                int index = 0;
-                foreach (var propInfo in Properties)
-                {
-                    PropertyIndex.Add(propInfo.Name, index);
-                    RetrieveAdditionalTypeInfo(propInfo, index);
-                    index++;
-                }
-            }
-            else if (IsArray)
-            {
-                ArrayLength = type.GetArrayRank();
+                FillPropertyNameToIndex();
+                RetrieveAdditionalTypeInfos();
             }
         }
 
-        internal static Type TryGetUnderlyingType(PropertyInfo propInfo)
+        public static Type TryGetUnderlyingType(PropertyInfo propInfo)
         {
             return Nullable.GetUnderlyingType(propInfo.PropertyType) ?? propInfo.PropertyType;
         }
 
-        protected virtual void RetrieveAdditionalTypeInfo(PropertyInfo propInfo, int currentIndex)
+        #region AdditionalTypeInfo
+
+        private void RetrieveAdditionalTypeInfos()
         {
-            ;
+            int index = 0;
+            foreach (var propInfo in Properties)
+                RetrieveAdditionalTypeInfo(propInfo, index++);
         }
 
+        protected virtual void RetrieveAdditionalTypeInfo(PropertyInfo propInfo, int currentIndex)
+        { }
 
+        #endregion
+
+        #region Properties
+
+        public IReadOnlyList<PropertyInfo> Properties { get; }
+
+        public IEnumerable<string> PropertyNames => IsDynamic ?
+            DynamicPropertyNames is null ?
+                Enumerable.Empty<string>() :
+                DynamicPropertyNames :
+            Properties.Select(i => i.Name);
+
+        protected IReadOnlyDictionary<string, int> PropertyNameToIndex => propertyNameToIndex;
+
+        private void FillPropertyNameToIndex()
+        {
+            int index = 0;
+            foreach (var name in PropertyNames)
+                propertyNameToIndex.Add(name, index++);
+        }
+
+        private readonly Dictionary<string, int> propertyNameToIndex = new Dictionary<string, int>();
+
+        #endregion
+
+        #region Array
+
+        public bool IsArray { get; }
+
+        #endregion
+
+        #region Dynamic
+
+        public bool IsDynamic { get; }
+
+        public static bool IsDynamicType(Type type) => typeof(IDictionary<string, object>).IsAssignableFrom(type);
+
+        public IReadOnlyList<string> DynamicPropertyNames { get; private set; }
+
+        public IDictionary<string, object> CastDynamic(object item) => (IDictionary<string, object>)item;
+
+        public void FillDynamicPropertyNames(object item)
+        {
+            if (IsDynamic && DynamicPropertyNames != null)
+                return;
+            DynamicPropertyNames = CastDynamic(item).Keys.ToArray();
+            FillPropertyNameToIndex();
+        }
+
+        #endregion
     }
 }
 

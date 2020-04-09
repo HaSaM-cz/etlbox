@@ -16,25 +16,34 @@ namespace ALE.ETLBox.DataFlow
     /// <typeparam name="TOutput">Type of data output.</typeparam>
     /// <example>
     /// <code>
-    /// DbSource&lt;MyRow&gt; source = new DbSource&lt;MyRow&gt;("dbo.table");
+    /// var source = new DbSource&lt;MyRow&gt;("dbo.table");
     /// source.LinkTo(dest); //Transformation or Destination
     /// source.Execute(); //Start the data flow
     /// </code>
     /// </example>
-    public class DbSource<TOutput> : DataFlowSource<TOutput>, ITask, IDataFlowSource<TOutput>
+    public class DbSource<TOutput> :
+        DataFlowSource<TOutput>,
+        ITask,
+        IDataFlowSource<TOutput>
+        where TOutput : class
     {
         #region Init
 
-        private DbSource(IConnectionManager connectionManager = null) :
+        private DbSource(IConnectionManager connectionManager = null, Func<TOutput> createItem = null) :
             base(connectionManager)
-            => typeInfo = new DbTypeInfo(typeof(TOutput));
+        {
+            typeInfo = new DbTypeInfo(typeof(TOutput));
+            if (createItem is null && !typeInfo.IsArray)
+                createItem = ItemFactory<TOutput>.CreateDefault;
+            this.createItem = createItem;
+        }
 
-        public DbSource(TableDefinition tableDefinition, IConnectionManager connectionManager = null) :
-            this(connectionManager)
+        public DbSource(TableDefinition tableDefinition, IConnectionManager connectionManager = null, Func<TOutput> createItem = null) :
+            this(connectionManager, createItem)
             => TableDefinition = tableDefinition ?? throw new ArgumentNullException(nameof(tableDefinition));
 
-        public DbSource(string sql, IConnectionManager connectionManager = null) :
-            this(connectionManager)
+        public DbSource(string sql, IConnectionManager connectionManager = null, Func<TOutput> createItem = null) :
+            this(connectionManager, createItem)
         {
             if (sql is null)
                 throw new ArgumentNullException(nameof(sql));
@@ -71,7 +80,7 @@ namespace ALE.ETLBox.DataFlow
             }
         }
 
-        public List<string> ColumnNamesEvaluated
+        public IList<string> ColumnNamesEvaluated
         {
             get
             {
@@ -115,49 +124,52 @@ namespace ALE.ETLBox.DataFlow
 
         private void ReadAll()
         {
-            SqlTask sqlT = CreateSqlTask(SqlForRead);
-            DefineActions(sqlT, ColumnNamesEvaluated);
-            sqlT.ExecuteReader();
-            CleanupSqlTask(sqlT);
+            SqlTask sqlTask = CreateSqlTask(SqlForRead);
+            DefineActions(sqlTask, ColumnNamesEvaluated);
+            sqlTask.ExecuteReader();
+            CleanupSqlTask(sqlTask);
         }
 
         SqlTask CreateSqlTask(string sql)
         {
-            var sqlT = new SqlTask(this, sql)
+            var sqlTask = new SqlTask(this, sql)
             {
                 DisableLogging = true,
             };
-            sqlT.Actions = new List<Action<object>>();
-            return sqlT;
+            sqlTask.Actions = new List<Action<object>>();
+            return sqlTask;
         }
 
         TOutput _row;
-        internal void DefineActions(SqlTask sqlT, List<string> columnNames)
+
+        internal void DefineActions(SqlTask sqlTask, IList<string> columnNames)
         {
-            _row = default(TOutput);
+            if (columnNames is null)
+                throw new ArgumentNullException(nameof(columnNames));
+            _row = null;
+            sqlTask.BeforeRowReadAction = () => _row = CreateItem();
             if (typeInfo.IsArray)
             {
-                sqlT.BeforeRowReadAction = () =>
-                    _row = (TOutput)Activator.CreateInstance(typeof(TOutput), new object[] { columnNames.Count });
+                if (createItem is null)
+                    createItem = () => ItemFactory<TOutput>.CreateArray(columnNames.Count);
                 int index = 0;
                 foreach (var colName in columnNames)
-                    index = SetupArrayFillAction(sqlT, index);
+                    SetupArrayFillAction(sqlTask, index++);
             }
             else
             {
-                if (columnNames?.Count == 0) columnNames = typeInfo.PropertyNames;
+                if (columnNames.Count == 0) columnNames = typeInfo.PropertyNames.ToArray();
                 foreach (var colName in columnNames)
                 {
                     if (typeInfo.HasPropertyOrColumnMapping(colName))
-                        SetupObjectFillAction(sqlT, colName);
+                        SetupObjectFillAction(sqlTask, colName);
                     else if (typeInfo.IsDynamic)
-                        SetupDynamicObjectFillAction(sqlT, colName);
+                        SetupDynamicObjectFillAction(sqlTask, colName);
                     else
-                        sqlT.Actions.Add(col => { });
+                        sqlTask.Actions.Add(col => { });
                 }
-                sqlT.BeforeRowReadAction = () => _row = (TOutput)Activator.CreateInstance(typeof(TOutput));
             }
-            sqlT.AfterRowReadAction = () =>
+            sqlTask.AfterRowReadAction = () =>
             {
                 if (_row != null)
                 {
@@ -167,9 +179,16 @@ namespace ALE.ETLBox.DataFlow
             };
         }
 
-        private int SetupArrayFillAction(SqlTask sqlT, int index)
+        #region CreateItem
+
+        public virtual TOutput CreateItem() => createItem?.Invoke();
+
+        private Func<TOutput> createItem;
+
+        #endregion
+
+        private void SetupArrayFillAction(SqlTask sqlT, int index)
         {
-            int currentIndexAvoidingClosure = index;
             sqlT.Actions.Add(col =>
             {
                 try
@@ -178,18 +197,16 @@ namespace ALE.ETLBox.DataFlow
                     {
                         var ar = _row as System.Array;
                         var con = Convert.ChangeType(col, typeof(TOutput).GetElementType());
-                        ar.SetValue(con, currentIndexAvoidingClosure);
+                        ar.SetValue(con, index);
                     }
                 }
                 catch (Exception e)
                 {
                     if (!ErrorHandler.HasErrorBuffer) throw e;
-                    _row = default(TOutput);
+                    _row = null;
                     ErrorHandler.Send(e, ErrorHandler.ConvertErrorData<TOutput>(_row));
                 }
             });
-            index++;
-            return index;
         }
 
         private void SetupObjectFillAction(SqlTask sqlT, string colName)
@@ -208,7 +225,7 @@ namespace ALE.ETLBox.DataFlow
                 catch (Exception e)
                 {
                     if (!ErrorHandler.HasErrorBuffer) throw e;
-                    _row = default(TOutput);
+                    _row = null;
                     ErrorHandler.Send(e, ErrorHandler.ConvertErrorData<TOutput>(_row));
                 }
             });
@@ -222,14 +239,13 @@ namespace ALE.ETLBox.DataFlow
                 {
                     if (_row != null)
                     {
-                        dynamic r = _row as ExpandoObject;
-                        ((IDictionary<String, Object>)r).Add(colName, colValue);
+                        typeInfo.CastDynamic(_row).Add(colName, colValue);
                     }
                 }
                 catch (Exception e)
                 {
                     if (!ErrorHandler.HasErrorBuffer) throw e;
-                    _row = default(TOutput);
+                    _row = null;
                     ErrorHandler.Send(e, ErrorHandler.ConvertErrorData<TOutput>(_row));
                 }
             });

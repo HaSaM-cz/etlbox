@@ -19,13 +19,16 @@ namespace ALE.ETLBox.DataFlow
     /// </code>
     /// </example>
     public class DbDestination<TInput> :
-        DataFlowBatchDestination<TInput>, ITask, IDataFlowDestination<TInput>
+        DataFlowBatchDestination<TInput>,
+        ITask,
+        IDataFlowDestination<TInput>
+        where TInput : class
     {
         public DbDestination(TableDefinition tableDefinition, IConnectionManager connectionManager = null, int batchSize = DefaultBatchSize) :
             base(connectionManager, batchSize)
         {
             TableDefinition = tableDefinition ?? throw new ArgumentNullException(nameof(tableDefinition));
-            typeInfo = new TypeInfo(typeof(TInput));
+            TypeInfo = new DbTypeInfo(typeof(TInput));
         }
 
         /* ITask Interface */
@@ -33,16 +36,13 @@ namespace ALE.ETLBox.DataFlow
         /* Public properties */
         public TableDefinition TableDefinition { get; }
 
-        private readonly TypeInfo typeInfo;
+        internal DbTypeInfo TypeInfo { get; }
 
         protected override void WriteBatch(ref TInput[] data)
         {
             TableDefinition.EnsureColumns(DbConnectionManager);
-
             base.WriteBatch(ref data);
-
             TryBulkInsertData(data);
-
             LogProgressBatch(data.Length);
         }
 
@@ -67,10 +67,8 @@ namespace ALE.ETLBox.DataFlow
         private TableData<TInput> CreateTableDataObject(ref TInput[] data)
         {
             var rows = ConvertRows(ref data);
-            var td = new TableData<TInput>(TableDefinition, rows);
-            if (typeInfo.IsDynamic && data.Length > 0)
-                td.DynamicColumnNames.AddRange(((IDictionary<string, object>)data[0]).Keys);
-            return td;
+            TypeInfo.FillDynamicPropertyNames(data[0]);
+            return new TableData<TInput>(TableDefinition, rows, TypeInfo);
         }
 
         private List<object[]> ConvertRows(ref TInput[] data)
@@ -80,13 +78,13 @@ namespace ALE.ETLBox.DataFlow
             {
                 if (CurrentRow == null) continue;
                 object[] rowResult;
-                if (typeInfo.IsArray)
+                if (TypeInfo.IsArray)
                 {
                     rowResult = CurrentRow as object[];
                 }
-                else if (typeInfo.IsDynamic)
+                else if (TypeInfo.IsDynamic)
                 {
-                    IDictionary<string, object> propertyValues = (IDictionary<string, object>)CurrentRow;
+                    var propertyValues = TypeInfo.CastDynamic(CurrentRow);
                     rowResult = new object[propertyValues.Count];
                     int index = 0;
                     foreach (var prop in propertyValues)
@@ -97,9 +95,9 @@ namespace ALE.ETLBox.DataFlow
                 }
                 else
                 {
-                    rowResult = new object[typeInfo.PropertyLength];
+                    rowResult = new object[TypeInfo.Properties.Count];
                     int index = 0;
-                    foreach (PropertyInfo propInfo in typeInfo.Properties)
+                    foreach (PropertyInfo propInfo in TypeInfo.Properties)
                     {
                         rowResult[index] = propInfo.GetValue(CurrentRow);
                         index++;

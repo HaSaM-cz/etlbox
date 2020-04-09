@@ -8,8 +8,11 @@ namespace ALE.ETLBox
 {
     public abstract class GenericTask : ITask
     {
-        protected GenericTask(IConnectionManager connectionManager = null) =>
-            ConnectionManager = connectionManager;
+        protected GenericTask(IConnectionManager connectionManager = null)
+        {
+            if (connectionManager != null)
+                ConnectionManager = connectionManager;
+        }
 
         private string _taskType;
         public virtual string TaskType

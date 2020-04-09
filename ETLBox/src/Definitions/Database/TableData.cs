@@ -15,12 +15,15 @@ namespace ALE.ETLBox
 
     public class TableData<T> : ITableData
     {
-        public TableData(TableDefinition definition, List<object[]> rows = null)
+        internal TableData(TableDefinition definition, List<object[]> rows, DbTypeInfo typeInfo)
         {
             Definition = definition ?? throw new ArgumentNullException(nameof(definition));
             Rows = rows ?? new List<object[]>();
-            typeInfo = new DbTypeInfo(typeof(T));
+            this.typeInfo = typeInfo ?? new DbTypeInfo(typeof(T));
         }
+        public TableData(TableDefinition definition, List<object[]> rows = null) :
+            this(definition, rows, typeInfo: null)
+        { }
 
         public IColumnMappingCollection ColumnMapping => GetColumnMappingFromDefinition();
 
@@ -30,19 +33,12 @@ namespace ALE.ETLBox
             foreach (var col in Definition.Columns)
                 if (!col.IsIdentity)
                 {
-                    if (!typeInfo.IsDynamic && !typeInfo.IsArray)
+                    if (typeInfo.IsArray)
+                        mapping.Add(new DataColumnMapping(col.SourceColumn, col.DataSetColumn));
+                    else
                     {
                         if (typeInfo.HasPropertyOrColumnMapping(col.Name))
                             mapping.Add(new DataColumnMapping(col.SourceColumn, col.DataSetColumn));
-                    }
-                    else if (typeInfo.IsDynamic)
-                    {
-                        if (DynamicColumnNames.Contains(col.Name))
-                            mapping.Add(new DataColumnMapping(col.SourceColumn, col.DataSetColumn));
-                    }
-                    else
-                    {
-                        mapping.Add(new DataColumnMapping(col.SourceColumn, col.DataSetColumn));
                     }
                 }
             return mapping;
@@ -58,7 +54,6 @@ namespace ALE.ETLBox
         #endregion
 
         public object[] CurrentRow { get; private set; }
-        public List<string> DynamicColumnNames { get; } = new List<string>();
         private int readIndex;
         public TableDefinition Definition { get; }
         private int? IDColumnIndex => Definition.IDColumnIndex;
@@ -103,14 +98,6 @@ namespace ALE.ETLBox
             {
                 return Definition.Columns.FindIndex(col => col.Name == name);
             }
-            else if (typeInfo.IsDynamic)
-            {
-                int ix = DynamicColumnNames.FindIndex(n => n == name);
-                if (HasIDColumnIndex)
-                    if (ix >= IDColumnIndex) ix++;
-                return ix;
-
-            }
             else
             {
                 int ix = typeInfo.GetIndexByPropertyNameOrColumnMapping(name);
@@ -124,9 +111,6 @@ namespace ALE.ETLBox
         {
             throw new NotImplementedException();
         }
-
-        //public string GetDestinationDataType(int i) => Definition.Columns[ShiftIndexAroundIDColumn(i)].DataType;
-        //public System.Type GetDestinationNETDataType(int i) => Definition.Columns[ShiftIndexAroundIDColumn(i)].NETDataType;
 
         public string GetString(int i) => Convert.ToString(CurrentRow[ShiftIndexAroundIDColumn(i)]);
         public object GetValue(int i) => CurrentRow.Length > ShiftIndexAroundIDColumn(i) ? CurrentRow[ShiftIndexAroundIDColumn(i)] : (object)null;

@@ -3,13 +3,8 @@ using ALE.ETLBox.ConnectionManager;
 using ALE.ETLBox.ControlFlow;
 using ALE.ETLBox.DataFlow;
 using ALE.ETLBox.Helper;
-using ALE.ETLBox.Logging;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Text;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -115,6 +110,7 @@ namespace ALE.ETLBoxTests.Performance
         }
 
         private TimeSpan GetETLBoxTime<T>(int numberOfRows, CsvSource<T> source, DbDestination<T> dest)
+            where T : class
         {
             source.LinkTo(dest);
             var timeElapsedETLBox = BigDataHelper.LogExecutionTime($"Copying Csv into DB (non generic) with {numberOfRows} rows of data using ETLBox",
@@ -130,7 +126,5 @@ namespace ALE.ETLBoxTests.Performance
                 output.WriteLine("Elapsed " + timeElapsedETLBox.TotalSeconds + " seconds for ETLBox (Generic).");
             return timeElapsedETLBox;
         }
-
-
     }
 }

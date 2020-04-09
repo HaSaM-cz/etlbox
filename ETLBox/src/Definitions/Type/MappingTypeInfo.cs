@@ -19,9 +19,9 @@ namespace ALE.ETLBox.DataFlow
         {
             IsArrayInput = inputType.IsArray;
             IsArrayOutput = outputType.IsArray;
-            IsDynamic = typeof(IDynamicMetaObjectProvider).IsAssignableFrom(inputType)
-                || typeof(IDynamicMetaObjectProvider).IsAssignableFrom(outputType);
-
+            IsDynamic =
+                TypeInfo.IsDynamicType(inputType) ||
+                TypeInfo.IsDynamicType(outputType);
             if (!IsArray && !IsDynamic)
             {
                 foreach (var propInfo in outputType.GetProperties())

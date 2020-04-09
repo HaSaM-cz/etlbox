@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 
 namespace ALE.ETLBox.DataFlow
 {
@@ -14,11 +13,6 @@ namespace ALE.ETLBox.DataFlow
         /// </summary>
         /// <value>not white space</value>
         string Id { get; }
-        /// <summary>
-        /// Names of destination table columns (primary key) from which values <see cref="Id"/> is concatenated to be used for row deletion from destination table
-        /// </summary>
-        /// <value>non-null. Empty means to use table truncation instead (true <see cref="DbMerge{TInput}.UseTruncateMethod"/>)</value>
-        IEnumerable<string> IdColumnNamesForDeletion { get; }
         /// <summary>
         /// The result of a merge operation
         /// </summary>

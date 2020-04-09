@@ -53,10 +53,6 @@ namespace ALE.ETLBox.DataFlow
         /// Values (primary key values) <see cref="Id"/> is composed of
         /// </summary>
         public abstract IEnumerable<object> IdValues { get; }
-        /// <summary>
-        /// <see cref="IMergeableRow.IdColumnNamesForDeletion"/>
-        /// </summary>
-        public virtual IEnumerable<string> IdColumnNamesForDeletion => Enumerable.Empty<string>();
 
         #endregion
 

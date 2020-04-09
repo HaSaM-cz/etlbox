@@ -5,7 +5,7 @@ using System.Linq;
 namespace ALE.ETLBox.DataFlow
 {
     /// <summary>
-    /// This attribute defines if the column is used as an Id for the DBMerge. It it supposed
+    /// This attribute defines if the column is used as an Id for the <see cref="IMergeableRow."/>. It it supposed
     /// to use with an object that either inherits from MergeableRow or implements the IMergeable interface.
     /// If you do not provide this attribute, you need to override the UniqueId property
     /// if you inherit from MergeableRow.

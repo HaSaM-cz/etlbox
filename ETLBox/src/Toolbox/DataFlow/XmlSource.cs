@@ -1,12 +1,6 @@
 ﻿using Newtonsoft.Json;
 using System;
-using System.Collections.Generic;
 using System.Dynamic;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using System.Xml;
 using System.Xml.Linq;
@@ -24,6 +18,7 @@ namespace ALE.ETLBox.DataFlow
     /// </code>
     /// </example>
     public class XmlSource<TOutput> : DataFlowStreamSource<TOutput>, ITask, IDataFlowSource<TOutput>
+        where TOutput : class
     {
         /* ITask Interface */
         public override string TaskName => $"Read Xml from Uri: {CurrentRequestUri ?? ""}";
@@ -80,12 +75,12 @@ namespace ALE.ETLBox.DataFlow
                         {
                             try
                             {
-                                TOutput output = default(TOutput);
+                                TOutput output = null;
                                 if (TypeInfo.IsDynamic)
                                 {
                                     string jsonText = JsonConvert.SerializeXNode(el);
-                                    dynamic res = JsonConvert.DeserializeObject<ExpandoObject>(jsonText) as dynamic;
-                                    output = ((IDictionary<string, object>)res)[ElementName] as dynamic;
+                                    var res = JsonConvert.DeserializeObject<ExpandoObject>(jsonText);
+                                    output = TypeInfo.CastDynamic(res)[ElementName] as dynamic;
                                 }
                                 else
                                 {

@@ -98,8 +98,7 @@ namespace ALE.ETLBox.DataFlow
                 object value = ExcelDataReader.GetValue(col);
                 if (TypeInfo.IsDynamic)
                 {
-                    var r = row as IDictionary<string, Object>;
-                    r.Add("Column"+ (colNrInRange+1), value);
+                    TypeInfo.CastDynamic(row).Add("Column"+ (colNrInRange+1), value);
                 }
                 else
                 {

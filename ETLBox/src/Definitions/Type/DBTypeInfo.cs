@@ -7,20 +7,17 @@ namespace ALE.ETLBox.DataFlow
 {
     internal class DbTypeInfo : TypeInfo
     {
-        internal List<string> PropertyNames { get; set; } = new List<string>();
-        internal Dictionary<string, string> ColumnMap2Property { get; set; } = new Dictionary<string, string>();
-        internal Dictionary<PropertyInfo, Type> UnderlyingPropType { get; set; } = new Dictionary<PropertyInfo, Type>();
+        public DbTypeInfo(Type type) :
+            base(type)
+        { }
 
-        internal DbTypeInfo(Type typ) : base(typ)
+        public IReadOnlyDictionary<string, string> ColumnNameToPropertyName => columnNameToPropertyName;
+        public IReadOnlyDictionary<PropertyInfo, Type> UnderlyingPropType => underlyingPropType;
+
+        protected override void RetrieveAdditionalTypeInfo(PropertyInfo property, int index)
         {
-
-        }
-
-        protected override void RetrieveAdditionalTypeInfo(PropertyInfo propInfo, int currentIndex)
-        {
-            PropertyNames.Add(propInfo.Name);
-            AddColumnMappingAttribute(propInfo);
-            AddUnderlyingType(propInfo);
+            AddColumnMappingAttribute(property);
+            AddUnderlyingType(property);
 
         }
 
@@ -28,39 +25,42 @@ namespace ALE.ETLBox.DataFlow
         {
             var attr = propInfo.GetCustomAttribute<ColumnMap>();
             if (attr != null)
-                ColumnMap2Property.Add(attr.ColumnName, propInfo.Name);
+                columnNameToPropertyName.Add(attr.ColumnName, propInfo.Name);
         }
 
         private void AddUnderlyingType(PropertyInfo propInfo)
         {
             Type t = TypeInfo.TryGetUnderlyingType(propInfo);
-            UnderlyingPropType.Add(propInfo, t);
+            underlyingPropType.Add(propInfo, t);
         }
 
-        internal bool HasPropertyOrColumnMapping(string name)
+        public bool HasPropertyOrColumnMapping(string name)
         {
-            if (ColumnMap2Property.ContainsKey(name))
+            if (ColumnNameToPropertyName.ContainsKey(name))
                 return true;
             else
-                return PropertyNames.Any(propName => propName == name);
+                return PropertyNames.Contains(name);
         }
-        internal PropertyInfo GetInfoByPropertyNameOrColumnMapping(string propNameOrColMapName)
+        public PropertyInfo GetInfoByPropertyNameOrColumnMapping(string propNameOrColMapName)
         {
             PropertyInfo result = null;
-            if (ColumnMap2Property.ContainsKey(propNameOrColMapName))
-                result = Properties[PropertyIndex[ColumnMap2Property[propNameOrColMapName]]];
+            if (ColumnNameToPropertyName.ContainsKey(propNameOrColMapName))
+                result = Properties[PropertyNameToIndex[ColumnNameToPropertyName[propNameOrColMapName]]];
             else
-                result = Properties[PropertyIndex[propNameOrColMapName]];
+                result = Properties[PropertyNameToIndex[propNameOrColMapName]];
             return result;
         }
 
-        internal int GetIndexByPropertyNameOrColumnMapping(string propNameOrColMapName)
+        public int GetIndexByPropertyNameOrColumnMapping(string propNameOrColMapName)
         {
-            if (ColumnMap2Property.ContainsKey(propNameOrColMapName))
-                return PropertyIndex[ColumnMap2Property[propNameOrColMapName]];
+            if (ColumnNameToPropertyName.ContainsKey(propNameOrColMapName))
+                return PropertyNameToIndex[ColumnNameToPropertyName[propNameOrColMapName]];
             else
-                return PropertyIndex[propNameOrColMapName];
+                return PropertyNameToIndex[propNameOrColMapName];
         }
+
+        private readonly Dictionary<string, string> columnNameToPropertyName = new Dictionary<string, string>();
+        private readonly Dictionary<PropertyInfo, Type> underlyingPropType = new Dictionary<PropertyInfo, Type>();
     }
 }
 
