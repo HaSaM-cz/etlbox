@@ -64,7 +64,7 @@ namespace ALE.ETLBox.DataFlow
         /* Public Properties */
         public override ISourceBlock<T> SourceBlock => outputSource.SourceBlock;
         public override ITargetBlock<T> TargetBlock => lookup.TargetBlock;
-        public DeltaMode DeltaMode { get; set; }
+        public MergeMode Mode { get; set; }
 
         protected readonly TableDefinition TableDefinition;
 
@@ -108,40 +108,39 @@ namespace ALE.ETLBox.DataFlow
                 destinationTableAsSource,
                 row => SetChangeAction(row)
                 );
-
-            destinationTable.BeforeBatchWrite = batch =>
-            {
-                SetIdColumnNames();
-                if (DeltaMode == DeltaMode.Delta)
-                    DeltaTable.AddRange(batch.WithoutChangeAction(ChangeAction.Delete));
-                else
-                    DeltaTable.AddRange(batch);
-
-                if (UseTruncateMethod)
-                {
-                    TruncateDestinationOnce();
-                    return batch.WithChangeAction(
-                        ChangeAction.Insert,
-                        ChangeAction.Update,
-                        ChangeAction.None
-                        ).
-                        ToArray();
-                }
-                else
-                {
-                    SqlDeleteIds(batch.WithoutChangeAction(
-                        ChangeAction.Insert,
-                        ChangeAction.None
-                        ));
-                    return batch.WithChangeAction(
-                        ChangeAction.Insert,
-                        ChangeAction.Update
-                        ).
-                        ToArray();
-                }
-            };
-
+            destinationTable.BeforeBatchWrite = BeforeBatchWrite;
             lookup.LinkTo(destinationTable);
+        }
+
+        private T[] BeforeBatchWrite(T[] batch)
+        {
+            SetIdColumnNames();
+            DeltaTable.AddRange(Mode == MergeMode.NoDeletions ?
+                batch.WithoutChangeAction(ChangeAction.Delete) :
+                batch
+                );
+            if (UseTruncateMethod)
+            {
+                TruncateDestinationOnce();
+                return batch.WithChangeAction(
+                    ChangeAction.Insert,
+                    ChangeAction.Update,
+                    ChangeAction.None
+                    ).
+                    ToArray();
+            }
+            else
+            {
+                SqlDeleteIds(batch.WithoutChangeAction(
+                    ChangeAction.Insert,
+                    ChangeAction.None
+                    ));
+                return batch.WithChangeAction(
+                    ChangeAction.Insert,
+                    ChangeAction.Update
+                    ).
+                    ToArray();
+            }
         }
 
         private void InitOutputFlow()
@@ -154,8 +153,8 @@ namespace ALE.ETLBox.DataFlow
 
             destinationTable.OnCompletion = () =>
             {
-                SetIdColumnNames();
-                IdentifyAndDeleteMissingEntries();
+                if (Mode == MergeMode.Full)
+                    IdentifyAndDeleteMissingEntries();
                 outputSource.Execute();
             };
         }
@@ -206,24 +205,19 @@ namespace ALE.ETLBox.DataFlow
         {
             if (
                 wasTruncationExecuted ||
-                DeltaMode == DeltaMode.NoDeletions
+                Mode == MergeMode.NoDeletions
                 )
             {
                 return;
             }
-            wasTruncationExecuted = true;
             TruncateTableTask.Truncate(ConnectionManager, TableDefinition.Name);
+            wasTruncationExecuted = true;
         }
 
         void IdentifyAndDeleteMissingEntries()
         {
-            if (DeltaMode == DeltaMode.NoDeletions)
-                return;
-            IEnumerable<T> deletions = null;
-            if (DeltaMode == DeltaMode.Delta)
-                deletions = OriginalDestinationRows.WithChangeAction(ChangeAction.Delete).ToArray();
-            else
-                deletions = OriginalDestinationRows.WithChangeAction(null).ToArray();
+            var deletions = OriginalDestinationRows.WithChangeAction(null).ToArray();
+            SetIdColumnNames();
             if (!UseTruncateMethod)
                 SqlDeleteIds(deletions);
             foreach (var row in deletions)

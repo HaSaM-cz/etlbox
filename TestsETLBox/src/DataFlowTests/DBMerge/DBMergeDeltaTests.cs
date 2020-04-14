@@ -52,7 +52,7 @@ namespace ALE.ETLBoxTests.DataFlowTests
             //Act
             DbMerge<MyMergeRow> dest = new DbMerge<MyMergeRow>("DBMergeDeltaDestination", connection)
             {
-                DeltaMode = DeltaMode.Delta
+                Mode = MergeMode.Delta
             };
             source.LinkTo(dest);
             source.Execute();

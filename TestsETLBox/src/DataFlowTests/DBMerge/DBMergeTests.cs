@@ -73,7 +73,7 @@ namespace ALE.ETLBoxTests.DataFlowTests
 
             //Act
             DbMerge<MyMergeRow> dest = new DbMerge<MyMergeRow>("DBMergeDestination", connection);
-            dest.DeltaMode = DeltaMode.NoDeletions;
+            dest.Mode = MergeMode.NoDeletions;
             //dest.DisableDeletion = true;
             source.LinkTo(dest);
             source.Execute();
