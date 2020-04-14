@@ -46,7 +46,7 @@ namespace ALE.ETLBox.DataFlow
                         }
                         catch (Exception e)
                         {
-                            if (!ErrorHandler.HasErrorBuffer) throw e;
+                            if (!ErrorHandler.HasErrorBuffer) throw;
                             ErrorHandler.Send(e, ErrorHandler.ConvertErrorData<TInput>(row));
                             return default(TOutput);
                         }

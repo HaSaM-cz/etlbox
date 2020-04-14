@@ -106,36 +106,38 @@ namespace ALE.ETLBox.DataFlow
         {
             lookup = new LookupTransformation<T, T>(
                 destinationTableAsSource,
-                row => UpdateRowWithDeltaInfo(row)
+                row => SetChangeAction(row)
                 );
 
             destinationTable.BeforeBatchWrite = batch =>
             {
                 SetIdColumnNames();
                 if (DeltaMode == DeltaMode.Delta)
-                    DeltaTable.AddRange(batch.Where(row => row.ChangeAction != ChangeAction.Delete));
+                    DeltaTable.AddRange(batch.WithoutChangeAction(ChangeAction.Delete));
                 else
                     DeltaTable.AddRange(batch);
 
                 if (UseTruncateMethod)
                 {
                     TruncateDestinationOnce();
-                    return batch.Where(row =>
-                        row.ChangeAction == ChangeAction.Insert ||
-                        row.ChangeAction == ChangeAction.Update ||
-                        row.ChangeAction == ChangeAction.None
-                        ).ToArray();
+                    return batch.WithChangeAction(
+                        ChangeAction.Insert,
+                        ChangeAction.Update,
+                        ChangeAction.None
+                        ).
+                        ToArray();
                 }
                 else
                 {
-                    SqlDeleteIds(batch.Where(row =>
-                        row.ChangeAction != ChangeAction.Insert &&
-                        row.ChangeAction != ChangeAction.None
+                    SqlDeleteIds(batch.WithoutChangeAction(
+                        ChangeAction.Insert,
+                        ChangeAction.None
                         ));
-                    return batch.Where(row =>
-                        row.ChangeAction == ChangeAction.Insert ||
-                        row.ChangeAction == ChangeAction.Update
-                        ).ToArray();
+                    return batch.WithChangeAction(
+                        ChangeAction.Insert,
+                        ChangeAction.Update
+                        ).
+                        ToArray();
                 }
             };
 
@@ -158,20 +160,17 @@ namespace ALE.ETLBox.DataFlow
             };
         }
 
-        private T UpdateRowWithDeltaInfo(T row)
+        private T SetChangeAction(T row)
         {
             if (row is null)
                 throw new ArgumentNullException(nameof(row));
             row.SetChangeAction();
             InitDestinationIdToOriginalRowOnce();
             destinationIdToOriginalRow.TryGetValue(row.Id, out var originalDestinationRow);
-            if (
-                DeltaMode == DeltaMode.Delta &&
-                row.ChangeAction == ChangeAction.Delete
-                )
+            if (row.ChangeAction.HasValue)
             {
                 if (originalDestinationRow != null)
-                    originalDestinationRow.ChangeAction = ChangeAction.Delete;
+                    originalDestinationRow.ChangeAction = row.ChangeAction;
             }
             else
             {
@@ -222,9 +221,9 @@ namespace ALE.ETLBox.DataFlow
                 return;
             IEnumerable<T> deletions = null;
             if (DeltaMode == DeltaMode.Delta)
-                deletions = OriginalDestinationRows.WithChangeAction(ChangeAction.Delete).ToList();
+                deletions = OriginalDestinationRows.WithChangeAction(ChangeAction.Delete).ToArray();
             else
-                deletions = OriginalDestinationRows.WithChangeAction(null).ToList();
+                deletions = OriginalDestinationRows.WithChangeAction(null).ToArray();
             if (!UseTruncateMethod)
                 SqlDeleteIds(deletions);
             foreach (var row in deletions)

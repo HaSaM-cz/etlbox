@@ -20,8 +20,8 @@ namespace ALE.ETLBox.DataFlow
             IsArrayInput = inputType.IsArray;
             IsArrayOutput = outputType.IsArray;
             IsDynamic =
-                TypeInfo.IsDynamicType(inputType) ||
-                TypeInfo.IsDynamicType(outputType);
+                inputType.IsDynamic() ||
+                outputType.IsDynamic();
             if (!IsArray && !IsDynamic)
             {
                 foreach (var propInfo in outputType.GetProperties())

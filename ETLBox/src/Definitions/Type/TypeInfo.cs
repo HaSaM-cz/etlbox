@@ -12,7 +12,7 @@ namespace ALE.ETLBox.DataFlow
             if (type is null)
                 throw new ArgumentNullException(nameof(type));
             IsArray = type.IsArray;
-            IsDynamic = IsDynamicType(type);
+            IsDynamic = type.IsDynamic();
             if (!IsArray && !IsDynamic)
             {
                 Properties = type.GetProperties();
@@ -73,11 +73,14 @@ namespace ALE.ETLBox.DataFlow
 
         public bool IsDynamic { get; }
 
-        public static bool IsDynamicType(Type type) => typeof(IDictionary<string, object>).IsAssignableFrom(type);
-
         public IReadOnlyList<string> DynamicPropertyNames { get; private set; }
 
-        public IDictionary<string, object> CastDynamic(object item) => (IDictionary<string, object>)item;
+        public IDictionary<string, object> CastDynamic(object item)
+        {
+            if (!IsDynamic)
+                throw new InvalidOperationException("Type is not dynamic");
+            return item.CastDynamic();
+        }
 
         public void FillDynamicPropertyNames(object item)
         {

@@ -3,7 +3,7 @@
 namespace ALE.ETLBox.DataFlow
 {
     /// <summary>
-    /// Represents table row in destination database for <see cref="DbMerge{TInput}"/>
+    /// Represents table row in destination database for <see cref="DbMerge{T}"/>
     /// </summary>
     public interface IMergeableRow :
         IEquatable<IMergeableRow>
@@ -34,6 +34,7 @@ namespace ALE.ETLBox.DataFlow
         /// <summary>
         /// Updates <see cref="ChangeAction"/> if possible using internal logic
         /// </summary>
+        /// <remarks>Called by <see cref="DbMerge{T}"/> during merging process</remarks>
         void SetChangeAction();
         /// <summary>
         /// Updates <see cref="ChangeTime"/> to <see cref="DateTime.Now"/>/null if <see cref="ChangeAction"/> is <see cref="ChangeAction"/>/null

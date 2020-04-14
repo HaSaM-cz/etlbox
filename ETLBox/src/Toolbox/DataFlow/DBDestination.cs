@@ -42,6 +42,8 @@ namespace ALE.ETLBox.DataFlow
         {
             TableDefinition.EnsureColumns(DbConnectionManager);
             base.WriteBatch(ref data);
+            if (data.Length == 0)
+                return;
             TryBulkInsertData(data);
             LogProgressBatch(data.Length);
         }

@@ -8,8 +8,12 @@ namespace ALE.ETLBox.DataFlow
     /// </summary>
     public static class MergeableRows
     {
-        public static IEnumerable<T> WithChangeAction<T>(this IEnumerable<T> rows, ChangeAction? changeAction)
+        public static IEnumerable<T> WithChangeAction<T>(this IEnumerable<T> rows, params ChangeAction?[] changeActions)
             where T : IMergeableRow
-            => rows?.Where(i => i.ChangeAction == changeAction);
+            => rows?.Where(i => changeActions.Contains(i.ChangeAction));
+
+        public static IEnumerable<T> WithoutChangeAction<T>(this IEnumerable<T> rows, params ChangeAction?[] changeActions)
+            where T : IMergeableRow
+            => rows?.Where(i => !changeActions.Contains(i.ChangeAction));
     }
 }

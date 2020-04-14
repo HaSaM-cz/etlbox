@@ -60,14 +60,20 @@ namespace ALE.ETLBox.DataFlow
         protected virtual void InitObjects(int batchSize)
         {
             Buffer = new BatchBlock<TInput>(batchSize);
-            TargetAction = new ActionBlock<TInput[]>(d => WriteBatch(ref d));
+            TargetAction = new ActionBlock<TInput[]>(data =>
+            {
+                if (ProgressCount == 0)
+                    NLogStart();
+                if (data.Length == 0)
+                    return;
+                WriteBatch(ref data);
+            });
             SetCompletionTask();
             Buffer.LinkTo(TargetAction, new DataflowLinkOptions() { PropagateCompletion = true });
         }
 
         protected virtual void WriteBatch(ref TInput[] data)
         {
-            if (ProgressCount == 0) NLogStart();
             if (BeforeBatchWrite != null)
                 data = BeforeBatchWrite.Invoke(data);
         }
