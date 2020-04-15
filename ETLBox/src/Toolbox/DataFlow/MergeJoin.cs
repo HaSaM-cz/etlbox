@@ -40,7 +40,7 @@ namespace ALE.ETLBox.DataFlow
             {
                 _mergeJoinFunc = value;
                 Transformation.TransformationFunc = new Func<Tuple<TInput1, TInput2>, TOutput>(tuple => _mergeJoinFunc.Invoke(tuple.Item1, tuple.Item2));
-                JoinBlock.LinkTo(Transformation.TargetBlock, new DataflowLinkOptions { PropagateCompletion = true });
+                JoinBlock.LinkToWithCompletionPropagation(Transformation.TargetBlock);
             }
         }
 

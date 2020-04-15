@@ -68,7 +68,7 @@ namespace ALE.ETLBoxTests.DataFlowTests
             DbSource<MySimpleRow> source = new DbSource<MySimpleRow>("DBMergeSource", SqlConnection);
 
             //Act
-            DbMerge<MySimpleRow> dest = new DbMerge<MySimpleRow>("[dest].[AzureMergeDestination]", AzureSqlConnection);
+            DbMerge<MySimpleRow> dest = new DbMerge<MySimpleRow>(MergeMode.Full, "[dest].[AzureMergeDestination]", AzureSqlConnection);
             source.LinkTo(dest);
             source.Execute();
             dest.Wait();

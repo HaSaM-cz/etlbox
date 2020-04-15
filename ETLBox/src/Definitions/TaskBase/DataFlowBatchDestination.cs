@@ -69,7 +69,7 @@ namespace ALE.ETLBox.DataFlow
                 WriteBatch(ref data);
             });
             SetCompletionTask();
-            Buffer.LinkTo(TargetAction, new DataflowLinkOptions() { PropagateCompletion = true });
+            Buffer.LinkToWithCompletionPropagation(TargetAction);
         }
 
         protected virtual void WriteBatch(ref TInput[] data)

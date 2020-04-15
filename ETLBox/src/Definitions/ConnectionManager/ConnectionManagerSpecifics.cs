@@ -85,9 +85,9 @@ namespace ALE.ETLBox.ConnectionManager
 
         #endregion
 
-        #region Concat
+        #region SQL
 
-        public static string ConcatColumns(this ConnectionManagerType type, IEnumerable<string> columnNames)
+        public static string SqlConcatColumns(this ConnectionManagerType type, IEnumerable<string> columnNames)
         {
             if (columnNames is null)
                 throw new ArgumentNullException(nameof(columnNames));
@@ -100,6 +100,19 @@ namespace ALE.ETLBox.ConnectionManager
                     $" {string.Join("||", columns)} " :
                     $"CONCAT( {string.Join(",", columns)} )"
             };
+        }
+
+        public static string SqlIdIn(this ConnectionManagerType type, IEnumerable<string> idColumnNames, IEnumerable<string> ids)
+        {
+            if (ids is null)
+                throw new ArgumentNullException(nameof(ids));
+            if (!ids.Any())
+                throw new ArgumentException("At least one id is required", nameof(ids));
+            string id = type.SqlConcatColumns(idColumnNames);
+            if (string.IsNullOrWhiteSpace(id))
+                throw new ArgumentException("At least one id column name is required", nameof(idColumnNames));
+            string idsText = string.Join(",", ids.Select(i => $"'{i}'"));
+            return $"{id} in ({idsText})";
         }
 
         #endregion

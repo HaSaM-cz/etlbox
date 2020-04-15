@@ -24,15 +24,17 @@ namespace ALE.ETLBox.DataFlow
         where T : class, IMergeableRow
     {
         public DbMerge(
+            MergeMode mode,
             TableDefinition tableDefinition,
             IConnectionManager connectionManager = null,
             int batchSize = DbDestination.DefaultBatchSize,
             Func<T> createItem = null
             )
         {
+            Mode = mode;
             TableDefinition = tableDefinition ?? throw new ArgumentNullException(nameof(tableDefinition));
             tableDefinition.ValidateName(nameof(tableDefinition));
-            destinationTableAsSource = new DbSource<T>(tableDefinition, connectionManager, createItem);
+            this.createItem = createItem;
             destinationTable = new DbDestination<T>(tableDefinition, connectionManager, batchSize: batchSize);
             ConnectionManager = connectionManager;
             InitInternalFlow();
@@ -44,6 +46,10 @@ namespace ALE.ETLBox.DataFlow
 
         #region IdColumnNames
 
+        /// <summary>
+        /// Names of destination table columns comprising <see cref="IMergeableRow.Id"/>
+        /// </summary>
+        /// <value>Available during or after merging process, otherwise null</value>
         public IReadOnlyList<string> IdColumnNames { get; private set; }
 
         private void SetIdColumnNames()
@@ -61,10 +67,10 @@ namespace ALE.ETLBox.DataFlow
         public async Task ExecuteAsync() => await outputSource.ExecuteAsync();
         public void Execute() => outputSource.Execute();
 
-        /* Public Properties */
+        public MergeMode Mode { get; }
+
+        public override ITargetBlock<T> TargetBlock => fullMergeTarget?.TargetBlock ?? partialMergeTarget;
         public override ISourceBlock<T> SourceBlock => outputSource.SourceBlock;
-        public override ITargetBlock<T> TargetBlock => lookup.TargetBlock;
-        public MergeMode Mode { get; set; }
 
         protected readonly TableDefinition TableDefinition;
 
@@ -74,14 +80,25 @@ namespace ALE.ETLBox.DataFlow
             set
             {
                 base.ConnectionManager = value;
-                destinationTableAsSource.ConnectionManager = value;
+                if (fullMergeTarget != null)
+                    ((DbSource<T>)fullMergeTarget.Source).ConnectionManager = value;
                 destinationTable.ConnectionManager = value;
             }
         }
         public List<T> DeltaTable { get; set; } = new List<T>();
+        /// <summary>
+        /// Whether to truncate destination table before merging changes into it
+        /// </summary>
+        /// <remarks>Applicable only in <see cref="MergeMode.Full"/> <see cref="Mode"/> and with any <see cref="IdColumnNames"/></remarks>
+        /// <value>Default: false</value>
         public bool UseTruncateMethod
         {
-            get => IdColumnNames.Count == 0 || useTruncateMethod;
+            get =>
+                Mode == MergeMode.Full &&
+                (
+                    IdColumnNames?.Count == 0 ||
+                    useTruncateMethod
+                );
             set => useTruncateMethod = value;
         }
         public int BatchSize
@@ -90,26 +107,37 @@ namespace ALE.ETLBox.DataFlow
             set => destinationTable.BatchSize = value;
         }
 
-        /* Private stuff */
-        ObjectNameDescriptor TableName => new ObjectNameDescriptor(TableDefinition.Name, ConnectionType);
-        List<T> OriginalDestinationRows => lookup.LookupData;
+        private ObjectNameDescriptor TableName => new ObjectNameDescriptor(TableDefinition.Name, ConnectionType);
+        private IList<T> originalDestinationRows;
 
-        bool useTruncateMethod;
-        LookupTransformation<T, T> lookup;
-        readonly DbSource<T> destinationTableAsSource;
-        readonly DbDestination<T> destinationTable;
-        Dictionary<string, T> destinationIdToOriginalRow;
-        CustomSource<T> outputSource;
-        bool wasTruncationExecuted;
+        private LookupTransformation<T, T> fullMergeTarget;
+        private BatchBlock<T> partialMergeTarget;
+        private readonly Func<T> createItem;
+        private readonly DbDestination<T> destinationTable;
+        private Dictionary<string, T> destinationIdToOriginalRow;
+        private bool useTruncateMethod;
+        private bool wasTruncationExecuted;
+        private CustomSource<T> outputSource;
 
         private void InitInternalFlow()
         {
-            lookup = new LookupTransformation<T, T>(
-                destinationTableAsSource,
-                row => SetChangeAction(row)
-                );
             destinationTable.BeforeBatchWrite = BeforeBatchWrite;
-            lookup.LinkTo(destinationTable);
+            // full merge
+            if (Mode == MergeMode.Full)
+            {
+                var destinationTableAsSource = new DbSource<T>(TableDefinition, ConnectionManager, createItem);
+                fullMergeTarget = new LookupTransformation<T, T>(destinationTableAsSource, SetChangeAction);
+                originalDestinationRows = fullMergeTarget.LookupData;
+                fullMergeTarget.LinkTo(destinationTable);
+            }
+            // partial merge
+            else
+            {
+                partialMergeTarget = new BatchBlock<T>(destinationTable.BatchSize);
+                var sourceBatchProcessor = new TransformManyBlock<T[], T>(ProcessSourceBatch);
+                partialMergeTarget.LinkToWithCompletionPropagation(sourceBatchProcessor);
+                sourceBatchProcessor.LinkToWithCompletionPropagation(destinationTable.TargetBlock);
+            }
         }
 
         private T[] BeforeBatchWrite(T[] batch)
@@ -131,7 +159,7 @@ namespace ALE.ETLBox.DataFlow
             }
             else
             {
-                SqlDeleteIds(batch.WithoutChangeAction(
+                SqlDelete(batch.WithoutChangeAction(
                     ChangeAction.Insert,
                     ChangeAction.None
                     ));
@@ -141,6 +169,35 @@ namespace ALE.ETLBox.DataFlow
                     ).
                     ToArray();
             }
+        }
+
+        private IEnumerable<T> ProcessSourceBatch(T[] batch)
+        {
+            originalDestinationRows = GetDestinationRowsForSourceBatch(batch);
+            destinationIdToOriginalRow = null;
+            foreach (var row in batch)
+                SetChangeAction(row);
+            return batch;
+        }
+
+        private IList<T> GetDestinationRowsForSourceBatch(T[] batch)
+        {
+            SetIdColumnNames();
+            string sql = SqlFromTableWhereIdIn("select *", batch);
+            var source = new DbSource<T>(sql, ConnectionManager, createItem);
+            var rowsBatcher = new BatchBlock<T>(batch.Length);
+            T[] rows = null;
+            var batchProcessor = new ActionBlock<T[]>(i =>
+            {
+                if (rows != null)
+                    throw new InvalidOperationException("Rows already set");
+                rows = i;
+            });
+            using var link1 = source.SourceBlock.LinkToWithCompletionPropagation(rowsBatcher);
+            using var link2 = rowsBatcher.LinkToWithCompletionPropagation(batchProcessor);
+            source.Execute();
+            batchProcessor.Completion.Wait();
+            return rows ?? Array.Empty<T>();
         }
 
         private void InitOutputFlow()
@@ -164,7 +221,7 @@ namespace ALE.ETLBox.DataFlow
             if (row is null)
                 throw new ArgumentNullException(nameof(row));
             row.SetChangeAction();
-            InitDestinationIdToOriginalRowOnce();
+            InitDestinationIdToOriginalRow();
             destinationIdToOriginalRow.TryGetValue(row.Id, out var originalDestinationRow);
             if (row.ChangeAction.HasValue)
             {
@@ -192,12 +249,12 @@ namespace ALE.ETLBox.DataFlow
             return row;
         }
 
-        private void InitDestinationIdToOriginalRowOnce()
+        private void InitDestinationIdToOriginalRow()
         {
             if (destinationIdToOriginalRow != null)
                 return;
             destinationIdToOriginalRow = new Dictionary<string, T>();
-            foreach (var d in OriginalDestinationRows)
+            foreach (var d in originalDestinationRows)
                 destinationIdToOriginalRow.Add(d.Id, d);
         }
 
@@ -216,35 +273,38 @@ namespace ALE.ETLBox.DataFlow
 
         void IdentifyAndDeleteMissingEntries()
         {
-            var deletions = OriginalDestinationRows.WithChangeAction(null).ToArray();
+            var deletions = originalDestinationRows.WithChangeAction(null).ToArray();
             SetIdColumnNames();
             if (!UseTruncateMethod)
-                SqlDeleteIds(deletions);
+                SqlDelete(deletions);
             foreach (var row in deletions)
                 row.ChangeAction = ChangeAction.Delete;
             DeltaTable.AddRange(deletions);
         }
 
-        private void SqlDeleteIds(IEnumerable<T> rowsToDelete)
+        private void SqlDelete(IEnumerable<T> rows)
         {
-            if (IdColumnNames.Count == 0)
-                throw new InvalidOperationException();
-            if (!rowsToDelete.Any())
+            if (!rows.Any())
                 return;
-            var idsToDelete = rowsToDelete.Select(row => $"'{row.Id}'");
-            string id = ConnectionType.ConcatColumns(IdColumnNames);
-            foreach (var idsToDeleteBatch in idsToDelete.Batch(BatchSize))
-                SqlDeleteIds(id, idsToDelete);
+            foreach (var rowsToDeleteBatch in rows.Batch(BatchSize))
+                SqlDeleteBatch(rowsToDeleteBatch);
         }
 
-        private void SqlDeleteIds(string id, IEnumerable<string> idsToDelete)
+        private void SqlDeleteBatch(IEnumerable<T> rows)
         {
-            string ids = string.Join(",", idsToDelete);
-            new SqlTask(this, $@"DELETE FROM {TableName.QuotatedFullName} WHERE {id} IN ({ids})")
+            new SqlTask(this, SqlFromTableWhereIdIn("delete", rows))
             {
                 DisableLogging = true
             }.
             ExecuteNonQuery();
+        }
+
+        private string SqlFromTableWhereIdIn(string prefix, IEnumerable<T> rows)
+        {
+            if (IdColumnNames.Count == 0)
+                throw new InvalidOperationException($"Missing {nameof(IdColumnNames)}");
+            var ids = rows.Select(i => i.Id);
+            return $"{prefix} from {TableName.QuotatedFullName} where {ConnectionType.SqlIdIn(IdColumnNames, ids)}";
         }
 
         public void Wait() => destinationTable.Wait();

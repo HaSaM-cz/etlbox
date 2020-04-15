@@ -18,7 +18,7 @@ namespace ALE.ETLBox.DataFlow
         public virtual void Wait() => Completion.Wait();
 
         protected ActionBlock<TInput> TargetAction { get; set; }
-        protected List<Task> PredecessorCompletions { get; set; } = new List<Task>();
+        protected List<Task> PredecessorCompletions { get; } = new List<Task>();
         internal ErrorHandler ErrorHandler { get; set; } = new ErrorHandler();
 
         public void AddPredecessorCompletion(Task completion)
@@ -56,7 +56,7 @@ namespace ALE.ETLBox.DataFlow
             }
             catch (Exception e)
             {
-                throw e;
+                throw;
             }
             finally
             {

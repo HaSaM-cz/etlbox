@@ -46,7 +46,7 @@ namespace ALE.ETLBoxTests.DataFlowTests
             DbSource<MySimpleRow> source = new DbSource<MySimpleRow>("DBMergeSource", connection);
 
             //Act
-            DbMerge<MySimpleRow> dest = new DbMerge<MySimpleRow>("DBMergeDestination", connection);
+            DbMerge<MySimpleRow> dest = new DbMerge<MySimpleRow>(MergeMode.Full, "DBMergeDestination", connection);
             source.LinkTo(dest);
             source.Execute();
             dest.Wait();
@@ -74,7 +74,7 @@ namespace ALE.ETLBoxTests.DataFlowTests
             DbSource<MySimpleRow> source = new DbSource<MySimpleRow>("DBMergeSource", connection);
 
             //Act
-            DbMerge<MySimpleRow> merge = new DbMerge<MySimpleRow>("DBMergeDestination", connection);
+            DbMerge<MySimpleRow> merge = new DbMerge<MySimpleRow>(MergeMode.Full, "DBMergeDestination", connection);
             DbDestination<MySimpleRow> delta = new DbDestination<MySimpleRow>("DBMergeDelta", connection);
             source.LinkTo(merge);
             merge.LinkTo(delta);

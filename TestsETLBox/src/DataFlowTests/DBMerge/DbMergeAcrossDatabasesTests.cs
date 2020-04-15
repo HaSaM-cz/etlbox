@@ -73,7 +73,7 @@ namespace ALE.ETLBoxTests.DataFlowTests
 
             //Act
             var nameSource = new DbSource<Name>("Name", sourceConnection);
-            var personMerge = new DbMerge<People>("People", destConnection);
+            var personMerge = new DbMerge<People>(MergeMode.Full, "People", destConnection);
 
             var transform = new RowTransformation<Name, People>(d =>
             {

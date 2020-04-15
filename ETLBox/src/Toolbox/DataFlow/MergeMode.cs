@@ -4,6 +4,6 @@
     {
         Full = 0,
         NoDeletions = 1,
-        Delta = 2,
+        Delta = 2
     }
 }

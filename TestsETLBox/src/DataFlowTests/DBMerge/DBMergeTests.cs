@@ -47,7 +47,7 @@ namespace ALE.ETLBoxTests.DataFlowTests
             DbSource<MyMergeRow> source = new DbSource<MyMergeRow>("DBMergeSource", connection);
 
             //Act
-            DbMerge<MyMergeRow> dest = new DbMerge<MyMergeRow>("DBMergeDestination", connection);
+            DbMerge<MyMergeRow> dest = new DbMerge<MyMergeRow>(MergeMode.Full, "DBMergeDestination", connection);
             source.LinkTo(dest);
             source.Execute();
             dest.Wait();
@@ -72,8 +72,7 @@ namespace ALE.ETLBoxTests.DataFlowTests
             DbSource<MyMergeRow> source = new DbSource<MyMergeRow>("DBMergeSource", connection);
 
             //Act
-            DbMerge<MyMergeRow> dest = new DbMerge<MyMergeRow>("DBMergeDestination", connection);
-            dest.Mode = MergeMode.NoDeletions;
+            DbMerge<MyMergeRow> dest = new DbMerge<MyMergeRow>(MergeMode.NoDeletions, "DBMergeDestination", connection);
             //dest.DisableDeletion = true;
             source.LinkTo(dest);
             source.Execute();
@@ -98,7 +97,7 @@ namespace ALE.ETLBoxTests.DataFlowTests
             DbSource<MyMergeRow> source = new DbSource<MyMergeRow>("DBMergeSource", connection);
 
             //Act
-            DbMerge<MyMergeRow> dest = new DbMerge<MyMergeRow>("DBMergeDestination", connection);
+            DbMerge<MyMergeRow> dest = new DbMerge<MyMergeRow>(MergeMode.Full, "DBMergeDestination", connection);
             dest.UseTruncateMethod = true;
             source.LinkTo(dest);
             source.Execute();
@@ -124,7 +123,7 @@ namespace ALE.ETLBoxTests.DataFlowTests
             DbSource<MyMergeRow> source = new DbSource<MyMergeRow>("DBMergeEmptySource", SqlConnection);
 
             //Act
-            DbMerge<MyMergeRow> dest = new DbMerge<MyMergeRow>("DBMergeEmptyDestination", SqlConnection);
+            DbMerge<MyMergeRow> dest = new DbMerge<MyMergeRow>(MergeMode.Full, "DBMergeEmptyDestination", SqlConnection);
             source.LinkTo(dest);
             source.Execute();
             dest.Wait();
@@ -143,7 +142,7 @@ namespace ALE.ETLBoxTests.DataFlowTests
             DbSource<MyMergeRow> source = new DbSource<MyMergeRow>("DBMergeEmptySource", SqlConnection);
 
             //Act
-            DbMerge<MyMergeRow> dest = new DbMerge<MyMergeRow>("DBMergeEmptyDestination", SqlConnection);
+            DbMerge<MyMergeRow> dest = new DbMerge<MyMergeRow>(MergeMode.Full, "DBMergeEmptyDestination", SqlConnection);
             source.LinkTo(dest);
             source.Execute();
             dest.Wait();

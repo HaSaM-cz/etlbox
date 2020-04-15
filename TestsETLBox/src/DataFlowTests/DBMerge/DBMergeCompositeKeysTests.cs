@@ -89,7 +89,7 @@ namespace ALE.ETLBoxTests.DataFlowTests
             InsertDestinationData(connection, TND);
             //Act
             DbSource<MyMergeRow> source = new DbSource<MyMergeRow>("DBMergeSource", connection);
-            DbMerge<MyMergeRow> dest = new DbMerge<MyMergeRow>("DBMergeDestination", connection);
+            DbMerge<MyMergeRow> dest = new DbMerge<MyMergeRow>(MergeMode.Full, "DBMergeDestination", connection);
             source.LinkTo(dest);
             source.Execute();
             dest.Wait();
