@@ -117,17 +117,33 @@ namespace ALE.ETLBox.DataFlow
         public override void Execute()
         {
             NLogStart();
-            ReadAll();
-            Buffer.Complete();
+            try
+            {
+                ReadAll();
+                Buffer.Complete();
+            }
+            catch (Exception e)
+            {
+                ((IDataflowBlock)Buffer).Fault(e);
+                throw;
+            }
             NLogFinish();
         }
 
         private void ReadAll()
         {
-            SqlTask sqlTask = CreateSqlTask(SqlForRead);
-            DefineActions(sqlTask, ColumnNamesEvaluated);
-            sqlTask.ExecuteReader();
-            CleanupSqlTask(sqlTask);
+            SqlTask sqlTask = null;
+            try
+            {
+                sqlTask = CreateSqlTask(SqlForRead);
+                DefineActions(sqlTask, ColumnNamesEvaluated);
+                sqlTask.ExecuteReader();
+            }
+            finally
+            {
+                if (sqlTask != null)
+                    CleanupSqlTask(sqlTask);
+            }
         }
 
         SqlTask CreateSqlTask(string sql)
