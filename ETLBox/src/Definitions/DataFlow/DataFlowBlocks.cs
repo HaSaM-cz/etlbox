@@ -11,7 +11,13 @@ namespace ALE.ETLBox.DataFlow
         public static readonly DataflowLinkOptions LinkOptionsWithCompletionPropagation =
             new DataflowLinkOptions { PropagateCompletion = true };
 
-        public static IDisposable LinkToWithCompletionPropagation<T>(this ISourceBlock<T> source, ITargetBlock<T> target) =>
-            source.LinkTo(target, LinkOptionsWithCompletionPropagation);
+        public static IDisposable LinkToWithCompletionPropagation<T>(this ISourceBlock<T> source, ITargetBlock<T> target)
+        {
+            if (source is null)
+                throw new ArgumentNullException(nameof(source));
+            if (target is null)
+                throw new ArgumentNullException(nameof(target));
+            return source.LinkTo(target, LinkOptionsWithCompletionPropagation);
+        }
     }
 }

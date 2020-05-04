@@ -45,7 +45,7 @@ namespace ALE.ETLBox.DataFlow
             if (data.Length == 0)
                 return;
             TryBulkInsertData(data);
-            LogProgressBatch(data.Length);
+            LogProgressBatch((ulong)data.Length);
         }
 
         private void TryBulkInsertData(TInput[] data)

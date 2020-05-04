@@ -1,10 +1,6 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
-using System.Threading.Tasks;
-using System.Threading.Tasks.Dataflow;
 
 namespace ALE.ETLBox.DataFlow
 {
@@ -28,8 +24,8 @@ namespace ALE.ETLBox.DataFlow
             }
         }
 
-        public Func<int, string> GetNextUri { get; set; }
-        public Func<int, bool> HasNextUri { get; set; }
+        public Func<ulong, string> GetNextUri { get; set; }
+        public Func<ulong, bool> HasNextUri { get; set; }
 
         /// <summary>
         /// Specifies the resource type. By default requests are made with HttpClient.

@@ -6,7 +6,7 @@
     /// </summary>
     public static class DataFlow
     {
-        public static int? LoggingThresholdRows { get; set; } = 1000;
+        public static ulong? LoggingThresholdRows { get; set; } = 1000;
         public static bool HasLoggingThresholdRows => LoggingThresholdRows != null && LoggingThresholdRows > 0;
         /// <summary>
         /// Set all settings back to default (which is null or false)

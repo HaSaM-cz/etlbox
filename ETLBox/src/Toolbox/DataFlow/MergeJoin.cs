@@ -88,9 +88,9 @@ namespace ALE.ETLBox.DataFlow
             Transformation.LinkErrorTo(target);
     }
 
-    public class MergeJoinTarget<TInput> : GenericTask, IDataFlowDestination<TInput>
+    public class MergeJoinTarget<TInput> : DataFlowTask, IDataFlowDestination<TInput>
     {
-        public ITargetBlock<TInput> TargetBlock { get; set; }
+        public ITargetBlock<TInput> TargetBlock { get; }
 
         public void Wait()
         {
@@ -116,9 +116,15 @@ namespace ALE.ETLBox.DataFlow
             });
         }
 
-        public MergeJoinTarget(ITask parent, ITargetBlock<TInput> joinTarget)
+        public MergeJoinTarget(ITask parent, ITargetBlock<TInput> target)
         {
-            TargetBlock = joinTarget;
+            var progressBlock = new TransformBlock<TInput, TInput>(i =>
+            {
+                LogProgress();
+                return i;
+            });
+            progressBlock.LinkToWithCompletionPropagation(target);
+            TargetBlock = progressBlock;
             CopyTaskProperties(parent);
 
         }

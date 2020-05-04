@@ -1,18 +1,20 @@
 ﻿using ALE.ETLBox.ConnectionManager;
-using ALE.ETLBox.DataFlow;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+using System;
 
 namespace ALE.ETLBox
 {
-    public abstract class DataFlowTask : GenericTask, ITask
+    public abstract class DataFlowTask :
+        GenericTask,
+        ITask,
+        IDataFlowProgress
     {
         protected DataFlowTask(IConnectionManager connectionManager = null) :
             base(connectionManager)
         { }
 
-        protected int? _loggingThresholdRows;
-        public virtual int? LoggingThresholdRows
+        protected ulong? _loggingThresholdRows;
+
+        public virtual ulong? LoggingThresholdRows
         {
             get
             {
@@ -27,10 +29,29 @@ namespace ALE.ETLBox
             }
         }
 
-        public int ProgressCount { get; set; }
+        #region Progress
+
+        public ulong ProgressCount
+        {
+            get => progressCount;
+            protected set
+            {
+                if (progressCount == value)
+                    return;
+                progressCount = value;
+                OnProgressCountChanged(value);
+            }
+        }
+        public event EventHandler<ulong> ProgressCountChanged;
+
+        protected virtual void OnProgressCountChanged(ulong value) => ProgressCountChanged?.Invoke(this, value);
+
+        private ulong progressCount;
+
+        #endregion
 
         protected bool HasLoggingThresholdRows => LoggingThresholdRows != null && LoggingThresholdRows > 0;
-        protected int ThresholdCount { get; set; } = 1;
+        protected ulong ThresholdCount { get; set; } = 1;
 
 
         protected void NLogStart()
@@ -47,7 +68,7 @@ namespace ALE.ETLBox
                 NLogger.Info(TaskName, TaskType, "END", TaskHash, ControlFlow.ControlFlow.STAGE, ControlFlow.ControlFlow.CurrentLoadProcess?.Id);
         }
 
-        protected void LogProgressBatch(int rowsProcessed)
+        protected void LogProgressBatch(ulong rowsProcessed)
         {
             ProgressCount += rowsProcessed;
             if (!DisableLogging && HasLoggingThresholdRows && ProgressCount >= (LoggingThresholdRows * ThresholdCount))

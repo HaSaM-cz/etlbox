@@ -2,7 +2,9 @@
 
 namespace ALE.ETLBox.DataFlow
 {
-    public interface IDataFlowSource<TOutput> : IDataFlowLinkSource<TOutput>
+    public interface IDataFlowSource<TOutput> :
+        IDataFlowLinkSource<TOutput>,
+        IDataFlowProgress
     {
         Task ExecuteAsync();
         void Execute();
