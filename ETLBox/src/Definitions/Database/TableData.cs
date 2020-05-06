@@ -49,8 +49,6 @@ namespace ALE.ETLBox
         public List<object[]> Rows { get; }
         IReadOnlyList<IReadOnlyList<object>> ITableData.Rows => Rows;
 
-        private List<object[]> rows;
-
         #endregion
 
         public object[] CurrentRow { get; private set; }

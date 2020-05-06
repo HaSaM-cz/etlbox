@@ -50,14 +50,6 @@ namespace ALE.ETLBox.DataFlow
             {
                 await TargetAction.Completion.ConfigureAwait(false);
             }
-            catch (AggregateException ae)
-            {
-                throw ae.InnerException;
-            }
-            catch (Exception e)
-            {
-                throw;
-            }
             finally
             {
                 CleanUp();
