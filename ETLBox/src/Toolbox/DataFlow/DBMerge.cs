@@ -297,6 +297,7 @@ namespace ALE.ETLBox.DataFlow
                 DisableLogging = true
             }.
             ExecuteNonQuery();
+            LogProgressBatch((ulong)rows.Count());
         }
 
         private string SqlFromTableWhereIdIn(string prefix, IEnumerable<T> rows)
