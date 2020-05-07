@@ -48,4 +48,8 @@
     </None>
   </ItemGroup>
 
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="rd &quot;$(TargetDir)img&quot; /S /Q" />
+  </Target>
+
 </Project>
