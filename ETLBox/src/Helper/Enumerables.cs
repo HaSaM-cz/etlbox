@@ -25,18 +25,21 @@ namespace ALE.ETLBox.Helper
             if (size <= 0)
                 throw new ArgumentOutOfRangeException(nameof(size), size, "Value must be positive");
             using var enumerator = items.GetEnumerator();
-            while (enumerator.MoveNext())
+            bool next;
+            while (next = enumerator.MoveNext())
             {
                 int i = 0;
                 // Batch is a local function closing over `i` and `enumerator` that executes the inner batch enumeration
                 IEnumerable<T> Batch()
                 {
+                    if (!next)
+                        throw new InvalidOperationException("Batch enumeration has already been enumerated and may be enumerated only once");
                     do yield return enumerator.Current;
-                    while (++i < size && enumerator.MoveNext());
+                    while (++i < size && (next = enumerator.MoveNext()));
                 }
 
                 yield return Batch();
-                while (++i < size && enumerator.MoveNext()) ; // discard skipped items
+                while (++i < size && (next = enumerator.MoveNext())) ; // discard skipped items
             }
         }
     }
