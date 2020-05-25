@@ -102,48 +102,17 @@ namespace ALE.ETLBox.ConnectionManager
             };
         }
 
-        public static (string sql, ulong count) SqlIdIn(this ConnectionManagerType type, IEnumerable<string> idColumnNames, IEnumerable<string> ids)
+        public static string SqlIdIn(this ConnectionManagerType type, IEnumerable<string> idColumnNames, IEnumerable<string> ids)
         {
             if (ids is null)
                 throw new ArgumentNullException(nameof(ids));
             string id = type.SqlConcatColumns(idColumnNames);
             if (string.IsNullOrWhiteSpace(id))
                 throw new ArgumentException("At least one id column name is required", nameof(idColumnNames));
-            ulong count = 0;
-            string idsText = string.Join(",", ids.Select(i =>
-            {
-                count++;
-                return $"'{i}'";
-            }));
+            string idsText = string.Join(",", ids.Select(i => $"'{i}'"));
             if (string.IsNullOrWhiteSpace(idsText))
                 throw new ArgumentException("At least one id is required", nameof(ids));
-            string sql = $"{id} in ({idsText})";
-            return (sql, count);
-        }
-
-        public static (string sql, bool supported) RowsAffected(this ConnectionManagerType type, string sql)
-        {
-            if (string.IsNullOrWhiteSpace(sql))
-                throw new ArgumentException("SQL must be non-(null or white space)", nameof(sql));
-            switch (type)
-            {
-                // https://stackoverflow.com/questions/174143/counting-the-number-of-deleted-rows-in-a-sql-server-stored-procedure
-                case ConnectionManagerType.SqlServer:
-                    sql += "\nselect @@rowcount";
-                    break;
-                // https://stackoverflow.com/a/22546994/7821542
-                case ConnectionManagerType.Postgres:
-                    sql = $"with affected as ({sql} returning *) select count(*) from affected";
-                    break;
-                case ConnectionManagerType.Access:
-                case ConnectionManagerType.Adomd:
-                case ConnectionManagerType.SQLite:
-                case ConnectionManagerType.MySql:
-                case ConnectionManagerType.Unknown:
-                default:
-                    return (sql, false);
-            }
-            return (sql, true);
+            return $"{id} in ({idsText})";
         }
 
         #endregion

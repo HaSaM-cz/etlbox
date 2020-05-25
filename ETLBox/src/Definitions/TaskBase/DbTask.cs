@@ -1,9 +1,6 @@
 ﻿using ALE.ETLBox.ConnectionManager;
-using ALE.ETLBox.DataFlow;
 using System;
 using System.Collections.Generic;
-using System.Data;
-using System.Dynamic;
 using System.Linq;
 
 namespace ALE.ETLBox.ControlFlow
@@ -121,7 +118,6 @@ namespace ALE.ETLBox.ControlFlow
             else
                 return (T)(Convert.ChangeType(result, typeof(T)));
         }
-
 
         public bool ExecuteScalarAsBool()
         {

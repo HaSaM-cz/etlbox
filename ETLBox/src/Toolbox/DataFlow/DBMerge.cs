@@ -183,7 +183,7 @@ namespace ALE.ETLBox.DataFlow
         private IList<T> GetDestinationRowsForSourceBatch(T[] batch)
         {
             SetIdColumnNames();
-            (string sql, _) = SqlFromTableWhereIdIn("select *", batch);
+            string sql = SqlFromTableWhereIdIn("select *", batch);
             var source = new DbSource<T>(sql, ConnectionManager, createItem);
             var rowsBatcher = new BatchBlock<T>(batch.Length);
             T[] rows = null;
@@ -292,30 +292,24 @@ namespace ALE.ETLBox.DataFlow
 
         private void SqlDeleteBatch(IEnumerable<T> rows)
         {
-            (string sql, ulong count) = SqlFromTableWhereIdIn("delete", rows);
-            var rowsAffected = ConnectionType.RowsAffected(sql);
-            if (rowsAffected.supported)
-                sql = rowsAffected.sql;
+            string sql = SqlFromTableWhereIdIn("delete", rows);
             var task = new SqlTask(this, sql)
             {
                 DisableLogging = true
             };
-            if (rowsAffected.supported)
-                count = task.ExecuteScalar<ulong>() ?? count;
-            else
-                task.ExecuteNonQuery();
+            int count = task.ExecuteNonQuery();
             if (count > 0)
-                LogProgressBatch(count);
+                LogProgressBatch((ulong)count);
         }
 
-        private (string sql, ulong count) SqlFromTableWhereIdIn(string prefix, IEnumerable<T> rows)
+        private string SqlFromTableWhereIdIn(string prefix, IEnumerable<T> rows)
         {
             if (IdColumnNames.Count == 0)
                 throw new InvalidOperationException($"Missing {nameof(IdColumnNames)}");
             var ids = rows.Select(i => i.Id);
-            (string sql, ulong count) = ConnectionType.SqlIdIn(IdColumnNames, ids);
+            string sql = ConnectionType.SqlIdIn(IdColumnNames, ids);
             sql = $"{prefix} from {TableName.QuotatedFullName} where {sql}";
-            return (sql, count);
+            return sql;
         }
 
         public void Wait() => destinationTable.Wait();
