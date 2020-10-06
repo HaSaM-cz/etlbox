@@ -80,6 +80,7 @@ namespace ALE.ETLBox
             }
         }
         public string AllColumnsWithoutIdentity => Columns.Except(Columns.Identity()).AsString();
+        public IEnumerable<string> ColumnNames => Columns.Select(i => i.Name);
 
         public bool EnsureColumns(IConnectionManager connectionManager)
         {
