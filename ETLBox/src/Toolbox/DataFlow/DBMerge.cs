@@ -13,14 +13,12 @@ namespace ALE.ETLBox.DataFlow
     /// Inserts, updates and (optionally) deletes data in db target.
     /// </summary>
     /// <typeparam name="T">Type of input data.</typeparam>
-    /// <example>
-    /// <code>
-    /// </code>
-    /// </example>
     public class DbMerge<T> :
         DataFlowTransformation<T, T>,
         IDataFlowBatchDestination<T>,
-        IDataFlowTransformation<T, T>
+        IDataFlowTransformation<T, T>,
+        IDataFlowProgress,
+        IDisposable
         where T : class, IMergeableRow
     {
         public DbMerge(
@@ -128,15 +126,15 @@ namespace ALE.ETLBox.DataFlow
                 var destinationTableAsSource = new DbSource<T>(TableDefinition, ConnectionManager, createItem);
                 fullMergeTarget = new LookupTransformation<T, T>(destinationTableAsSource, SetChangeAction);
                 originalDestinationRows = fullMergeTarget.LookupData;
-                fullMergeTarget.LinkTo(destinationTable);
+                (fullMergeToDestinationTableLink, _) = fullMergeTarget.LinkTo(destinationTable);
             }
             // partial merge
             else
             {
                 partialMergeTarget = new BatchBlock<T>(destinationTable.BatchSize);
                 var sourceBatchProcessor = new TransformManyBlock<T[], T>(ProcessSourceBatch);
-                partialMergeTarget.LinkToWithCompletionPropagation(sourceBatchProcessor);
-                sourceBatchProcessor.LinkToWithCompletionPropagation(destinationTable.TargetBlock);
+                partialMergeToSourceBatchProcessorLink = partialMergeTarget.LinkToWithCompletionPropagation(sourceBatchProcessor);
+                sourceBatchProcessorToDestinationTableLink = sourceBatchProcessor.LinkToWithCompletionPropagation(destinationTable.TargetBlock);
             }
         }
 
@@ -184,7 +182,7 @@ namespace ALE.ETLBox.DataFlow
         {
             SetIdColumnNames();
             string sql = SqlFromTableWhereIdIn("select *", batch);
-            var source = new DbSource<T>(sql, ConnectionManager, createItem);
+            var source = new DbSource<T>(sql, ConnectionManager, createItem, TableDefinition.ColumnNames);
             var rowsBatcher = new BatchBlock<T>(batch.Length);
             T[] rows = null;
             var batchProcessor = new ActionBlock<T[]>(i =>
@@ -312,7 +310,26 @@ namespace ALE.ETLBox.DataFlow
             return sql;
         }
 
+        public new ulong ProgressCount => destinationTable.ProgressCount;
+        public new event EventHandler<ulong> ProgressCountChanged
+        {
+            add => destinationTable.ProgressCountChanged += value;
+            remove => destinationTable.ProgressCountChanged -= value;
+        }
+
         public void Wait() => destinationTable.Wait();
         public Task Completion => destinationTable.Completion;
+
+        public virtual void Dispose()
+        {
+            fullMergeToDestinationTableLink?.Dispose();
+            partialMergeToSourceBatchProcessorLink?.Dispose();
+            sourceBatchProcessorToDestinationTableLink?.Dispose();
+        }
+
+        private IDisposable
+            fullMergeToDestinationTableLink,
+            partialMergeToSourceBatchProcessorLink,
+            sourceBatchProcessorToDestinationTableLink;
     }
 }

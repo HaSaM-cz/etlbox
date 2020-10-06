@@ -21,7 +21,7 @@ namespace ALE.ETLBox.DataFlow
     /// join.LinkTo(dest);
     /// </code>
     /// </example>
-    public class MergeJoin<TInput1, TInput2, TOutput> : DataFlowTask, ITask, IDataFlowLinkSource<TOutput>
+    public class MergeJoin<TInput1, TInput2, TOutput> : DataFlowTask, ITask, IDataFlowLinkSource<TOutput>, IDisposable
     {
         private Func<TInput1, TInput2, TOutput> _mergeJoinFunc;
 
@@ -31,7 +31,7 @@ namespace ALE.ETLBox.DataFlow
         /* Public Properties */
         public MergeJoinTarget<TInput1> Target1 { get; set; }
         public MergeJoinTarget<TInput2> Target2 { get; set; }
-        public ISourceBlock<TOutput> SourceBlock => Transformation.SourceBlock;
+        public ISourceBlock<TOutput> SourceBlock => transformation.SourceBlock;
 
         public Func<TInput1, TInput2, TOutput> MergeJoinFunc
         {
@@ -39,21 +39,20 @@ namespace ALE.ETLBox.DataFlow
             set
             {
                 _mergeJoinFunc = value;
-                Transformation.TransformationFunc = new Func<Tuple<TInput1, TInput2>, TOutput>(tuple => _mergeJoinFunc.Invoke(tuple.Item1, tuple.Item2));
-                JoinBlock.LinkToWithCompletionPropagation(Transformation.TargetBlock);
-            }
+                transformation.TransformationFunc = new Func<Tuple<TInput1, TInput2>, TOutput>(tuple => _mergeJoinFunc.Invoke(tuple.Item1, tuple.Item2));
+                joinBlockToTransformationLink = joinBlock.LinkToWithCompletionPropagation(transformation.TargetBlock);}
         }
 
         /* Private stuff */
-        internal JoinBlock<TInput1, TInput2> JoinBlock { get; set; }
-        internal RowTransformation<Tuple<TInput1, TInput2>, TOutput> Transformation { get; set; }
+        private readonly JoinBlock<TInput1, TInput2> joinBlock;
+        private readonly RowTransformation<Tuple<TInput1, TInput2>, TOutput> transformation;
 
         public MergeJoin()
         {
-            Transformation = new RowTransformation<Tuple<TInput1, TInput2>, TOutput>(this);
-            JoinBlock = new JoinBlock<TInput1, TInput2>();
-            Target1 = new MergeJoinTarget<TInput1>(this, JoinBlock.Target1);
-            Target2 = new MergeJoinTarget<TInput2>(this, JoinBlock.Target2);
+            transformation = new RowTransformation<Tuple<TInput1, TInput2>, TOutput>(this);
+            joinBlock = new JoinBlock<TInput1, TInput2>();
+            Target1 = new MergeJoinTarget<TInput1>(this, joinBlock.Target1);
+            Target2 = new MergeJoinTarget<TInput2>(this, joinBlock.Target2);
         }
 
         public MergeJoin(Func<TInput1, TInput2, TOutput> mergeJoinFunc) : this()
@@ -66,29 +65,33 @@ namespace ALE.ETLBox.DataFlow
             this.TaskName = name;
         }
 
-        public IDataFlowLinkSource<TOutput> LinkTo(IDataFlowLinkTarget<TOutput> target)
+        public (IDisposable link, IDataFlowLinkSource<TOutput> source) LinkTo(IDataFlowLinkTarget<TOutput> target)
             => (new DataFlowLinker<TOutput>(this, SourceBlock)).LinkTo(target);
 
-        public IDataFlowLinkSource<TOutput> LinkTo(IDataFlowLinkTarget<TOutput> target, Predicate<TOutput> predicate)
+        public (IDisposable link, IDataFlowLinkSource<TOutput> source) LinkTo(IDataFlowLinkTarget<TOutput> target, Predicate<TOutput> predicate)
             => (new DataFlowLinker<TOutput>(this, SourceBlock)).LinkTo(target, predicate);
 
-        public IDataFlowLinkSource<TOutput> LinkTo(IDataFlowLinkTarget<TOutput> target, Predicate<TOutput> rowsToKeep, Predicate<TOutput> rowsIntoVoid)
+        public (IDisposable link, IDataFlowLinkSource<TOutput> source) LinkTo(IDataFlowLinkTarget<TOutput> target, Predicate<TOutput> rowsToKeep, Predicate<TOutput> rowsIntoVoid)
             => (new DataFlowLinker<TOutput>(this, SourceBlock)).LinkTo(target, rowsToKeep, rowsIntoVoid);
 
-        public IDataFlowLinkSource<TConvert> LinkTo<TConvert>(IDataFlowLinkTarget<TOutput> target)
+        public (IDisposable link, IDataFlowLinkSource<TConvert> source) LinkTo<TConvert>(IDataFlowLinkTarget<TOutput> target)
             => (new DataFlowLinker<TOutput>(this, SourceBlock)).LinkTo<TConvert>(target);
 
-        public IDataFlowLinkSource<TConvert> LinkTo<TConvert>(IDataFlowLinkTarget<TOutput> target, Predicate<TOutput> predicate)
+        public (IDisposable link, IDataFlowLinkSource<TConvert> source) LinkTo<TConvert>(IDataFlowLinkTarget<TOutput> target, Predicate<TOutput> predicate)
             => (new DataFlowLinker<TOutput>(this, SourceBlock)).LinkTo<TConvert>(target, predicate);
 
-        public IDataFlowLinkSource<TConvert> LinkTo<TConvert>(IDataFlowLinkTarget<TOutput> target, Predicate<TOutput> rowsToKeep, Predicate<TOutput> rowsIntoVoid)
+        public (IDisposable link, IDataFlowLinkSource<TConvert> source) LinkTo<TConvert>(IDataFlowLinkTarget<TOutput> target, Predicate<TOutput> rowsToKeep, Predicate<TOutput> rowsIntoVoid)
             => (new DataFlowLinker<TOutput>(this, SourceBlock)).LinkTo<TConvert>(target, rowsToKeep, rowsIntoVoid);
 
-        public void LinkErrorTo(IDataFlowLinkTarget<ETLBoxError> target) =>
-            Transformation.LinkErrorTo(target);
+        public IDisposable LinkErrorTo(IDataFlowLinkTarget<ETLBoxError> target) =>
+            transformation.LinkErrorTo(target);
+
+        public virtual void Dispose() => joinBlockToTransformationLink?.Dispose();
+
+        private IDisposable joinBlockToTransformationLink;
     }
 
-    public class MergeJoinTarget<TInput> : DataFlowTask, IDataFlowDestination<TInput>
+    public class MergeJoinTarget<TInput> : DataFlowTask, IDataFlowDestination<TInput>, IDisposable
     {
         public ITargetBlock<TInput> TargetBlock { get; }
 
@@ -123,11 +126,15 @@ namespace ALE.ETLBox.DataFlow
                 LogProgress();
                 return i;
             });
-            progressBlock.LinkToWithCompletionPropagation(target);
+            progressBlockToTargetLink = progressBlock.LinkToWithCompletionPropagation(target);
             TargetBlock = progressBlock;
             CopyTaskProperties(parent);
 
         }
+
+        public virtual void Dispose() => progressBlockToTargetLink.Dispose();
+
+        private IDisposable progressBlockToTargetLink;
     }
 
     /// <summary>

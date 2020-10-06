@@ -41,12 +41,16 @@ namespace ALE.ETLBoxTests.DataFlowTests
 
             //Act
             JsonSource<ExpandoObject> source = new JsonSource<ExpandoObject>("res/JsonSource/TwoColumnsDifferentNames.json", ResourceType.File);
-            source.LinkTo(trans).LinkTo(dest);
-            source.Execute();
-            dest.Wait();
+            var linkTo1 = source.LinkTo(trans);
+            var linkTo2 = linkTo1.source.LinkTo(dest);
+            using (linkTo1.link)
+            using (linkTo2.link)
+            {
+                source.Execute();
+                dest.Wait();
 
-            //Assert
-            dest2Columns.AssertTestData();
-        }
+                //Assert
+                dest2Columns.AssertTestData();
+            }        }
     }
 }

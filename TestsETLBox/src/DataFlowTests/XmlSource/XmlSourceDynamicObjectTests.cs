@@ -44,12 +44,17 @@ namespace ALE.ETLBoxTests.DataFlowTests
             {
                 ElementName = "MySimpleRow"
             };
-            source.LinkTo(trans).LinkTo(dest);
-            source.Execute();
-            dest.Wait();
+            var link1 = source.LinkTo(trans);
+            var link2 = link1.source.LinkTo(dest);
+            using (link1.link)
+            using (link2.link)
+            {
+                source.Execute();
+                dest.Wait();
 
-            //Assert
-            dest2Columns.AssertTestData();
+                //Assert
+                dest2Columns.AssertTestData();
+            }
         }
     }
 }

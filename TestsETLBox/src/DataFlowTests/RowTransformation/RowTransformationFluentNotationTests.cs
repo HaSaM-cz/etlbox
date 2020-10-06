@@ -43,14 +43,23 @@ namespace ALE.ETLBoxTests.DataFlowTests
             RowTransformation<string[]> trans3 = new RowTransformation<string[]>(row => row);
 
             //Act
-            source.LinkTo(trans1).LinkTo(trans2).LinkTo(trans3).LinkTo(dest);
-            Task sourceT = source.ExecuteAsync();
-            Task destT = dest.Completion;
+            var linkTo1 = source.LinkTo(trans1);
+            var linkTo2 = linkTo1.source.LinkTo(trans2);
+            var linkTo3 = linkTo2.source.LinkTo(trans3);
+            var linkTo4 = linkTo3.source.LinkTo(dest);
+            using (linkTo1.link)
+            using (linkTo2.link)
+            using (linkTo3.link)
+            using (linkTo4.link)
+            {
+                Task sourceT = source.ExecuteAsync();
+                Task destT = dest.Completion;
 
-            //Assert
-            sourceT.Wait();
-            destT.Wait();
-            dest2Columns.AssertTestData();
+                //Assert
+                sourceT.Wait();
+                destT.Wait();
+                dest2Columns.AssertTestData();
+            }
         }
 
         [Fact]
@@ -67,14 +76,19 @@ namespace ALE.ETLBoxTests.DataFlowTests
             RowTransformation<MySimpleRow> trans1 = new RowTransformation<MySimpleRow>(row => row);
 
             //Act
-            source.LinkTo(trans1, row => row.Col1 < 4, row => row.Col1 >= 4).LinkTo(dest);
-            Task sourceT = source.ExecuteAsync();
-            Task destT = dest.Completion;
+            var link1 = source.LinkTo(trans1, row => row.Col1 < 4, row => row.Col1 >= 4);
+            var link2 = link1.source.LinkTo(dest);
+            using (link1.link)
+            using (link2.link)
+            {
+                Task sourceT = source.ExecuteAsync();
+                Task destT = dest.Completion;
 
-            //Assert
-            sourceT.Wait();
-            destT.Wait();
-            dest2Columns.AssertTestData();
+                //Assert
+                sourceT.Wait();
+                destT.Wait();
+                dest2Columns.AssertTestData();
+            }
         }
 
         public class MyOtherRow
@@ -107,14 +121,16 @@ namespace ALE.ETLBoxTests.DataFlowTests
                 );
 
             //Act
-            source.LinkTo<MyOtherRow>(trans1).LinkTo(dest);
-
-            //Assert
-            source.Execute();
-            dest.Wait();
-            dest2Columns.AssertTestData();
+            var link1 = source.LinkTo<MyOtherRow>(trans1);
+            var link2 = link1.source.LinkTo(dest);
+            using (link1.link)
+            using (link2.link)
+            {
+                //Assert
+                source.Execute();
+                dest.Wait();
+                dest2Columns.AssertTestData();
+            }
         }
-
-
     }
 }

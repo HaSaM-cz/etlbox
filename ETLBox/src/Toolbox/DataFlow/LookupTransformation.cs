@@ -2,8 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Dynamic;
-using System.Reflection;
-using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
 
@@ -15,7 +13,7 @@ namespace ALE.ETLBox.DataFlow
     /// <typeparam name="TInput">Type of data input and output</typeparam>
     /// <typeparam name="TSourceOutput">Type of lookup data</typeparam>
     public class LookupTransformation<TInput, TSourceOutput>
-        : DataFlowTransformation<TInput, TInput>, ITask, IDataFlowTransformation<TInput, TInput>
+        : DataFlowTransformation<TInput, TInput>, ITask, IDataFlowTransformation<TInput, TInput>, IDisposable
     {
         /* ITask Interface */
         public override string TaskName { get; set; } = "Lookup";
@@ -33,7 +31,7 @@ namespace ALE.ETLBox.DataFlow
             set
             {
                 _source = value;
-                Source.LinkTo(LookupBuffer);
+                (sourceToLookupBufferLink, _) = Source.LinkTo(LookupBuffer);
             }
         }
 
@@ -151,11 +149,15 @@ namespace ALE.ETLBox.DataFlow
             LookupData.Add(sourceRow);
         }
 
-        public void LinkLookupSourceErrorTo(IDataFlowLinkTarget<ETLBoxError> target) =>
+        public IDisposable LinkLookupSourceErrorTo(IDataFlowLinkTarget<ETLBoxError> target) =>
             Source.LinkErrorTo(target);
 
-        public void LinkLookupTransformationErrorTo(IDataFlowLinkTarget<ETLBoxError> target) =>
+        public IDisposable LinkLookupTransformationErrorTo(IDataFlowLinkTarget<ETLBoxError> target) =>
             RowTransformation.LinkErrorTo(target);
+
+        public virtual void Dispose() => sourceToLookupBufferLink?.Dispose();
+
+        private IDisposable sourceToLookupBufferLink;
     }
 
     /// <summary>
@@ -179,5 +181,4 @@ namespace ALE.ETLBox.DataFlow
             : base(lookupSource, transformationFunc, lookupList)
         { }
     }
-
 }

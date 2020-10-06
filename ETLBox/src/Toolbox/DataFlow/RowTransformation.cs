@@ -95,7 +95,7 @@ namespace ALE.ETLBox.DataFlow
             CopyTaskProperties(task);
         }
 
-        public void LinkErrorTo(IDataFlowLinkTarget<ETLBoxError> target)
+        public IDisposable LinkErrorTo(IDataFlowLinkTarget<ETLBoxError> target)
             => ErrorHandler.LinkErrorTo(target, TransformBlock.Completion);
 
 

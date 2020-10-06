@@ -3,13 +3,9 @@ using ALE.ETLBox.ConnectionManager;
 using ALE.ETLBox.ControlFlow;
 using ALE.ETLBox.DataFlow;
 using ALE.ETLBox.Helper;
-using ALE.ETLBox.Logging;
 using ALE.ETLBoxTests.Fixtures;
-using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using Xunit;
 
 namespace ALE.ETLBoxTests.DataFlowTests
@@ -62,12 +58,15 @@ namespace ALE.ETLBoxTests.DataFlowTests
             //Act
             CsvSource<string[]> source = new CsvSource<string[]>("res/UseCases/AccessData.csv");
             DbDestination<string[]> dest = new DbDestination<string[]>(testTable, AccessOdbcConnection, batchSize: 2);
-            source.LinkTo(dest);
-            source.Execute();
-            dest.Wait();
+            var linkTo = source.LinkTo(dest);
+            using (linkTo.link)
+            {
+                source.Execute();
+                dest.Wait();
 
-            //Assert
-            Assert.Equal(3, RowCountTask.Count(AccessOdbcConnection, testTable.Name));
+                //Assert
+                Assert.Equal(3, RowCountTask.Count(AccessOdbcConnection, testTable.Name));
+            }
         }
 
         public class Data
@@ -90,12 +89,15 @@ namespace ALE.ETLBoxTests.DataFlowTests
             //Act
             DbSource<Data> source = new DbSource<Data>(testTable, AccessOdbcConnection);
             DbDestination<Data> dest = new DbDestination<Data>("dbo.AccessTargetTableWTD", SqlConnection);
-            source.LinkTo(dest);
-            source.Execute();
-            dest.Wait();
+            var linkTo = source.LinkTo(dest);
+            using (linkTo.link)
+            {
+                source.Execute();
+                dest.Wait();
 
-            //Assert
-            destTable.AssertTestData();
+                //Assert
+                destTable.AssertTestData();
+            }
         }
 
         private void InsertTestData()
@@ -119,12 +121,15 @@ namespace ALE.ETLBoxTests.DataFlowTests
             //Act
             DbSource<Data> source = new DbSource<Data>("TestTable", AccessOdbcConnection);
             DbDestination<Data> dest = new DbDestination<Data>("dbo.AccessTargetTable", SqlConnection);
-            source.LinkTo(dest);
-            source.Execute();
-            dest.Wait();
+            var linkTo = source.LinkTo(dest);
+            using (linkTo.link)
+            {
+                source.Execute();
+                dest.Wait();
 
-            //Assert
-            destTable.AssertTestData();
+                //Assert
+                destTable.AssertTestData();
+            }
         }
 
 

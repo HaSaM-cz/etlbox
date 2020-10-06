@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 
 namespace ALE.ETLBox.DataFlow
 {
@@ -9,6 +10,6 @@ namespace ALE.ETLBox.DataFlow
         Task ExecuteAsync();
         void Execute();
 
-        void LinkErrorTo(IDataFlowLinkTarget<ETLBoxError> target);
+        IDisposable LinkErrorTo(IDataFlowLinkTarget<ETLBoxError> target);
     }
 }

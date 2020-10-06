@@ -7,7 +7,8 @@ namespace ALE.ETLBox.DataFlow
 {
     public abstract class DataFlowBatchDestination<TInput> :
         DataFlowDestination<TInput[]>,
-        IDataFlowBatchDestination<TInput>
+        IDataFlowBatchDestination<TInput>,
+        IDisposable
     {
         protected DataFlowBatchDestination(IConnectionManager connectionManager = null, int batchSize = DefaultBatchSize) :
             base(connectionManager)
@@ -59,6 +60,7 @@ namespace ALE.ETLBox.DataFlow
 
         protected virtual void InitObjects(int batchSize)
         {
+            bufferToTargetActionLink?.Dispose();
             Buffer = new BatchBlock<TInput>(batchSize);
             TargetAction = new ActionBlock<TInput[]>(data =>
             {
@@ -69,7 +71,7 @@ namespace ALE.ETLBox.DataFlow
                 WriteBatch(ref data);
             });
             SetCompletionTask();
-            Buffer.LinkToWithCompletionPropagation(TargetAction);
+            bufferToTargetActionLink = Buffer.LinkToWithCompletionPropagation(TargetAction);
         }
 
         protected virtual void WriteBatch(ref TInput[] data)
@@ -77,5 +79,9 @@ namespace ALE.ETLBox.DataFlow
             if (BeforeBatchWrite != null)
                 data = BeforeBatchWrite.Invoke(data);
         }
+
+        public virtual void Dispose() => bufferToTargetActionLink?.Dispose();
+
+        private IDisposable bufferToTargetActionLink;
     }
 }

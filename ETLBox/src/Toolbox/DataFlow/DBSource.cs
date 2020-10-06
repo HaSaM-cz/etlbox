@@ -42,7 +42,7 @@ namespace ALE.ETLBox.DataFlow
             this(connectionManager, createItem)
             => TableDefinition = tableDefinition ?? throw new ArgumentNullException(nameof(tableDefinition));
 
-        public DbSource(string sql, IConnectionManager connectionManager = null, Func<TOutput> createItem = null) :
+        public DbSource(string sql, IConnectionManager connectionManager = null, Func<TOutput> createItem = null, IEnumerable<string> columnNames = null) :
             this(connectionManager, createItem)
         {
             if (sql is null)
@@ -50,6 +50,8 @@ namespace ALE.ETLBox.DataFlow
             if (string.IsNullOrWhiteSpace(sql))
                 throw new ArgumentException("Value cannot be white space", nameof(sql));
             Sql = sql;
+            if (columnNames != null)
+                ColumnNames = columnNames.ToArray();
         }
 
         #endregion
@@ -62,7 +64,7 @@ namespace ALE.ETLBox.DataFlow
         public TableDefinition TableDefinition { get; }
         public bool HasSql => !string.IsNullOrWhiteSpace(Sql);
         public string Sql { get; }
-        public List<string> ColumnNames { get; set; }
+        public IList<string> ColumnNames { get; set; }
 
         public string SqlForRead
         {
